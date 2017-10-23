@@ -189,6 +189,7 @@ Library
                 , Idris.Directives
                 , Idris.Docs
                 , Idris.Docstrings
+                , Idris.ElabAction
                 , Idris.ElabDecls
                 , Idris.Erasure
                 , Idris.Error

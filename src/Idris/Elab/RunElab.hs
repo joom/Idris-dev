@@ -44,9 +44,6 @@ elabRunElab info fc script' ns =
                                 log <- getLog
                                 newGName <- get_global_nextname
                                 return (ElabResult tm ds (map snd is) ctxt impls highlights newGName))))
-
-
-
      setContext ctxt'
      processTacticDecls info newDecls
      sendHighlighting highlights

@@ -17,6 +17,7 @@ module Idris.Interactive(
 import Idris.AbsSyntax
 import Idris.CaseSplit
 import Idris.Core.Evaluate
+import Idris.Core.Elaborate
 import Idris.Core.TT
 import Idris.Delaborate
 import Idris.Elab.Term
@@ -25,6 +26,8 @@ import Idris.ElabDecls
 import Idris.Error
 import Idris.ErrReverse
 import Idris.IdeMode hiding (IdeModeCommand(..))
+import Idris.Prover
+import Idris.Reflection
 import Idris.Output
 
 import Util.Pretty

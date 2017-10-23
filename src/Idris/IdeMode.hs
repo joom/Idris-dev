@@ -238,6 +238,7 @@ data WhatDocs = Overview | Full
 data IdeModeCommand = REPLCompletions String
                     | Interpret String
                     | TypeOf String
+                    | ElabAction Int String String
                     | CaseSplit Int String
                     | AddClause Int String
                     | AddProofClause Int String
@@ -271,6 +272,8 @@ sexpToCommand (SexpList [SymbolAtom "repl-completions", StringAtom prefix])     
 sexpToCommand (SexpList [SymbolAtom "load-file", StringAtom filename, IntegerAtom line])    = Just (LoadFile filename (Just (fromInteger line)))
 sexpToCommand (SexpList [SymbolAtom "load-file", StringAtom filename])                      = Just (LoadFile filename Nothing)
 sexpToCommand (SexpList [SymbolAtom "type-of", StringAtom name])                            = Just (TypeOf name)
+sexpToCommand (SexpList [SymbolAtom "elab-action", IntegerAtom line, StringAtom name, StringAtom term]) =
+    Just (ElabAction (fromInteger line) name term)
 sexpToCommand (SexpList [SymbolAtom "case-split", IntegerAtom line, StringAtom name])       = Just (CaseSplit (fromInteger line) name)
 sexpToCommand (SexpList [SymbolAtom "add-clause", IntegerAtom line, StringAtom name])       = Just (AddClause (fromInteger line) name)
 sexpToCommand (SexpList [SymbolAtom "add-proof-clause", IntegerAtom line, StringAtom name]) = Just (AddProofClause (fromInteger line) name)

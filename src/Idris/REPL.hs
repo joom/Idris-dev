@@ -55,6 +55,7 @@ import Idris.DataOpts
 import Idris.Delaborate
 import Idris.Docs
 import Idris.Docstrings (overview, renderDocTerm, renderDocstring)
+import Idris.ElabAction
 import Idris.Elab.Clause
 import Idris.Elab.Term
 import Idris.Elab.Value
@@ -363,6 +364,11 @@ runIdeModeCommand h id orig fn mods (IdeMode.DocsFor name w) =
        Right n -> process "(idemode)" (DocStr (Left n) (howMuch w))
   where howMuch IdeMode.Overview = OverviewDocs
         howMuch IdeMode.Full     = FullDocs
+runIdeModeCommand h id orig fn mods (IdeMode.ElabAction line name term) =
+  do i <- getIState
+     case parseExpr i term of
+       Left err -> iPrintError . show . parseErrorDoc $ err
+       Right t -> process fn (ElabActionAt line (sUN name) t)
 runIdeModeCommand h id orig fn mods (IdeMode.CaseSplit line name) =
   process fn (CaseSplitAt False line (sUN name))
 runIdeModeCommand h id orig fn mods (IdeMode.AddClause line name) =
@@ -665,6 +671,7 @@ idemodeProcess fn (UnsetOpt ShowOrigErr) = do process fn (UnsetOpt ShowOrigErr)
                                               iPrintResult ""
 idemodeProcess fn (SetOpt x) = process fn (SetOpt x)
 idemodeProcess fn (UnsetOpt x) = process fn (UnsetOpt x)
+idemodeProcess fn (ElabActionAt pos n t) = process fn (ElabActionAt pos n t)
 idemodeProcess fn (CaseSplitAt False pos str) = process fn (CaseSplitAt False pos str)
 idemodeProcess fn (AddProofClauseFrom False pos str) = process fn (AddProofClauseFrom False pos str)
 idemodeProcess fn (AddClauseFrom False pos str) = process fn (AddClauseFrom False pos str)
@@ -1139,6 +1146,8 @@ process fn (DebugInfo n)
                                    iputStrLn (show cg')
         when (not (null fn)) $ iputStrLn (show fn)
 process fn (Search pkgs t) = searchByType pkgs t
+process fn (ElabActionAt updatefile l pterm)
+    = elabActionAt fn updatefile l pterm
 process fn (CaseSplitAt updatefile l n)
     = caseSplitAt fn updatefile l n
 process fn (AddClauseFrom updatefile l n)
