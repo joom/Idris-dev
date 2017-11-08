@@ -43,6 +43,7 @@ modules = Control.Arrow
         , Debug.Error
         , Debug.Trace
 
+        , Language.Reflection.Editor
         , Language.Reflection.Utils
 
         , Syntax.PreorderReasoning
