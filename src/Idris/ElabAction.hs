@@ -15,13 +15,9 @@ import Idris.Core.TT
 import Idris.Elab.Term
 import Idris.Elab.Value
 import Idris.Error
+import Idris.IdeMode
 import Idris.Reflection
 import Idris.Output
-
-data ActionData =
-    TermData PTerm
-  | TyData
-  | FunData
 
 elabActionAt :: FilePath -> Int -> Name -> PTerm -> Idris ()
 elabActionAt fn l name pterm
@@ -40,10 +36,10 @@ elabActionAt fn l name pterm
                                 tm <- runElabAction info ist fc [] tm ns
                                 EState is _ impls highlights _ _ <- getAux
                                 ctxt <- get_context
-                                let ds = [] -- todo
                                 log <- getLog
                                 newGName <- get_global_nextname
-                                return (ElabResult tm ds (map snd is) ctxt impls highlights newGName))))
+                                tm <- reifyTT tm
+                                return (ElabResult tm [] (map snd is) ctxt impls highlights newGName))))
        ist <- getIState
        let tm'' = inlineSmall ctxt [] tm'
        let pterm' = delabSugared ist tm''

@@ -6,7 +6,7 @@ License     : BSD3
 Maintainer  : The Idris Community.
 -}
 
-{-# LANGUAGE CPP, PatternGuards #-}
+{-# LANGUAGE CPP, PatternGuards, DeriveFunctor #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns -fwarn-unused-imports #-}
 module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          RFunClause(..), RFunDefn(..), RTyDecl(..),
@@ -75,9 +75,9 @@ rFunArgToPArg (RFunArg n _ RConstraint e) = PConstraint 0 (rArgOpts e) n Placeho
 
 data RFunClause a = RMkFunClause a a
                   | RMkImpossibleClause a
-                  deriving Show
+                  deriving (Show, Functor)
 
-data RFunDefn a = RDefineFun Name [RFunClause a] deriving Show
+data RFunDefn a = RDefineFun Name [RFunClause a] deriving (Show, Functor)
 
 -- | Prefix a name with the "Language.Reflection" namespace
 reflm :: String -> Name
