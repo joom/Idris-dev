@@ -22,34 +22,32 @@ interface Editorable a where
   fromEditor : SExp -> Maybe a
   toEditor : a -> SExp
 
-private
-err : String
-err = "The methods of Editorable are only for the use of the compiler"
-      ++ " and you tried to access the primitive instances"
+postulate private primFrom : SExp -> Maybe a
+postulate private primTo : a -> SExp
 
 implementation Editorable TTName where
-  fromEditor = idris_crash err
-  toEditor   = idris_crash err
+  fromEditor = primFrom
+  toEditor   = primTo
 
 implementation Editorable TT where
-  fromEditor = idris_crash err
-  toEditor   = idris_crash err
+  fromEditor = primFrom
+  toEditor   = primTo
 
 implementation Editorable TyDecl where
-  fromEditor = idris_crash err
-  toEditor   = idris_crash err
+  fromEditor = primFrom
+  toEditor   = primTo
 
 implementation Editorable DataDefn where
-  fromEditor = idris_crash err
-  toEditor   = idris_crash err
+  fromEditor = primFrom
+  toEditor   = primTo
 
 implementation Editorable a => Editorable (FunDefn a) where
-  fromEditor = idris_crash err
-  toEditor   = idris_crash err
+  fromEditor = primFrom
+  toEditor   = primTo
 
 implementation Editorable a => Editorable (FunClause a) where
-  fromEditor = idris_crash err
-  toEditor   = idris_crash err
+  fromEditor = primFrom
+  toEditor   = primTo
 
 implementation Editorable Unit where
   fromEditor (SExpList []) = Just ()
