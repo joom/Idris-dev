@@ -1834,7 +1834,7 @@ addImplBoundInf :: IState -> [Name] -> [Name] -> PTerm -> PTerm
 addImplBoundInf ist ns inf = addImpl' False ns inf [] ist
 
 -- | Add the implicit arguments to applications in the term [Name]
--- gives the names to always expend, even when under a binder of that
+-- gives the names to always expand, even when under a binder of that
 -- name (this is to expand methods with implicit arguments in
 -- dependent interfaces).
 addImpl :: [Name] -> IState -> PTerm -> PTerm

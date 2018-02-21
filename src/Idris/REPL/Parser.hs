@@ -141,7 +141,7 @@ parserCommands =
   , exprArgCmd ["spec"] Spec "?"
   , exprArgCmd ["whnf"] WHNF "(Debugging) Show weak head normal form of an expression"
   , exprArgCmd ["inline"] TestInline "?"
-  , elabArgCmd ["ea", "elabaction"] ElabActionAt
+  , elabArgCmd ["ea", "elabaction"] ElabEditAt
       ":ee <line> <name> runs the given Elab action on the line"
   , proofArgCmd ["cs", "casesplit"] CaseSplitAt
       ":cs <line> <name> splits the pattern variable on the line"
@@ -296,12 +296,12 @@ optArg cmd name = do
         pOption :: IP.IdrisParser Opt
         pOption = foldl (<|>) empty $ map (\(a, b) -> do discard (IP.symbol a); return b) setOptions
 
-elabArg :: (Int -> Name -> PTerm -> Command) -> String -> IP.IdrisParser (Either String Command)
+elabArg :: (Int -> Name -> [PTerm] -> Command) -> String -> IP.IdrisParser (Either String Command)
 elabArg cmd name = do
-    l <- fst <$> IP.natural
-    n <- fst <$> IP.name;
-    t <- IP.fullExpr defaultSyntax
-    return (Right (cmd (fromInteger l) n t))
+    l <- IP.natural
+    n <- IP.name;
+    t <- IP.fullExpr defaultSyntax -- TODO elab
+    return (Right (cmd (fromInteger l) n [t]))
 
 proofArg :: (Bool -> Int -> Name -> Command) -> String -> IP.IdrisParser (Either String Command)
 proofArg cmd name = do

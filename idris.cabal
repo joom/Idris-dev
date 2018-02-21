@@ -170,6 +170,7 @@ Library
                 , Idris.Elab.Term
                 , Idris.Elab.Quasiquote
                 , Idris.Elab.Rewrite
+                , Idris.Elab.Edit
 
                 , Idris.REPL.Browse
 
@@ -189,7 +190,6 @@ Library
                 , Idris.Directives
                 , Idris.Docs
                 , Idris.Docstrings
-                , Idris.ElabAction
                 , Idris.ElabDecls
                 , Idris.Erasure
                 , Idris.Error
@@ -222,6 +222,7 @@ Library
                 , Idris.REPL
                 , Idris.REPL.Parser
                 , Idris.REPL.Commands
+                , Idris.SExp
                 , Idris.Termination
                 , Idris.Transforms
                 , Idris.TypeSearch

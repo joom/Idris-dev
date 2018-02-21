@@ -17,7 +17,7 @@ module Idris.Parser(IdrisParser(..), ImportInfo(..), moduleName, addReplSyntax, 
                     runparser, ParseError, parseErrorDoc) where
 
 import Idris.AbsSyntax hiding (namespace, params)
-import Idris.Core.Evaluate
+import {-# SOURCE #-} Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Delaborate
 import Idris.Docstrings hiding (Unchecked)
@@ -632,6 +632,7 @@ FnOpt ::= 'total'
   | '%' 'assert_total'
   | '%' 'error_handler'
   | '%' 'reflection'
+  | '%' 'editor'
   | '%' 'specialise' '[' NameTimesList? ']'
   ;
 @
@@ -660,6 +661,7 @@ fnOpt = do keyword "total"; return TotalFn
         <|> ErrorReverse <$ P.try (lchar '%' *> reserved "error_reverse")
         <|> ErrorReduce  <$ P.try (lchar '%' *> reserved "error_reduce")
         <|> Reflection   <$ P.try (lchar '%' *> reserved "reflection")
+        <|> EditorAction <$ P.try (lchar '%' *> reserved "editor")
         <|> AutoHint     <$ P.try (lchar '%' *> reserved "hint")
         <|> OverlappingDictionary <$ P.try (lchar '%' *> reserved "overlapping")
         <|> do lchar '%'; reserved "specialise";

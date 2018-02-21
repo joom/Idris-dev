@@ -7,7 +7,7 @@ Maintainer  : The Idris Community.
 -}
 
 {-# LANGUAGE BangPatterns, DeriveGeneric, FlexibleInstances,
-             MultiParamTypeClasses, PatternGuards #-}
+             MultiParamTypeClasses, PatternGuards, LambdaCase #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# OPTIONS_GHC -fwarn-unused-imports #-}
 
@@ -33,8 +33,15 @@ module Idris.Core.Evaluate(normalise, normaliseTrace, normaliseC,
                 visibleDefinitions,
                 isUniverse, linearCheck, linearCheckArg) where
 
+import {-# SOURCE #-} Idris.AbsSyntaxTree
 import Idris.Core.CaseTree
 import Idris.Core.TT
+import {-# SOURCE #-} Idris.Elab.Term
+import {-# SOURCE #-} Idris.Core.Elaborate
+import {-# SOURCE #-} Idris.Core.Typecheck
+import {-# SOURCE #-} Idris.Parser
+import {-# SOURCE #-} Idris.Reflection
+import Idris.SExp
 
 import Control.Monad.State
 import Data.List
@@ -277,6 +284,8 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
                 | runtime = cases_runtime cd
                 | otherwise = cases_compiletime cd
 
+    ev :: [(Name, Int)] -> [Name] -> Bool
+       -> [(Name, Value)] -> TT Name -> Eval Value
     ev ntimes stk top env (P _ n ty)
         | Just (Let _ t v) <- lookupBinder n genv = ev ntimes stk top env v
     ev ntimes_in stk top env (P Ref n ty)
@@ -358,6 +367,52 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
        | Just (CaseOp _ _ _ _ _ _, _) <- lookupDefAccExact n (spec || (atRepl && noFree env)|| runtime) ctxt,
          at == txt "assert_total" && not (simpl || unfold)
             = ev ntimes (n : stk) top env arg
+
+    -- TODO elab
+    -- Treat "fromEditor" specially, as long as it's defined and
+    -- it is applied to SExps that represent things of primitive core language types
+    -- such as TTName, TT, TyDecl, DataDefn, FunDefn, FunClause
+      -- TODO check if ty evaluates to ..
+    ev ntimes stk top env (App _ (App _ (App _ (P _ n _) (P _ tyN _)) _) arg)
+       | n == editN "fromEditor" && tyN == reflm "TT" =
+         handle $ \s ->
+           case parseExpr idrisInit s of
+             Left err -> fail $ "parser error" -- TODO fix
+             -- 1) Parsed the surface syntax
+             Right pterm -> do
+               case elaborate "(toplevel)" initContext emptyContext
+                          0 (sMN 0 "toRaw") Erased initEState
+                          (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
+                 OK (result, _) -> do
+                   -- 2) Elaborated that into the core language
+                   let tm = resultTerm result
+                   -- 3) Reflect that to Raw in the core language
+                   let reflected = reflect tm
+                   -- 4) Typecheck the reflected term from Raw to TT
+                   case check initContext [] reflected of
+                   -- 5) Return the TT as a value
+                     OK (tmReflected, _) ->
+                       return (toValue initContext [] tmReflected)
+                     Error err -> fail $ show err
+                 Error err -> fail $ show err
+       | n == editN "fromEditor" && tyN == reflm "Raw" =
+         handle $ \s -> do
+           case parseExpr idrisInit s of
+             Left err -> fail $ "parser error" -- TODO fix
+             Right pterm -> do
+               undefined
+      where
+        handle :: (String -> ElabD Value) -> Eval Value
+        handle f =
+          case elaborate "(toplevel)" initContext emptyContext 0
+                  (sMN 0 "evalElab") Erased initEState
+                  (reifySExp arg >>= \case
+                      StringAtom s -> f s
+                      _ -> fail $ "Not StringAtom in fromEditor of TT") of
+            Error err -> fail $ show err -- TODO fix
+            OK (v, _) -> return v
+
+
     ev ntimes stk top env (App _ f a)
            = do f' <- ev ntimes stk False env f
                 a' <- ev ntimes stk False env a
@@ -851,8 +906,8 @@ data Context = MkContext {
 type TTDecl = (Def, RigCount, Injectivity, Accessibility, Totality, MetaInformation)
 
 -- | The initial empty context
+initContext :: Context
 initContext = MkContext 0 emptyContext
-
 
 mapDefCtxt :: (Def -> Def) -> Context -> Context
 mapDefCtxt f (MkContext t !defs) = MkContext t (mapCtxt f' defs)

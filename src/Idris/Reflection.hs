@@ -19,7 +19,8 @@ module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          reflectTTQuotePattern, reflm, reify, reifyBool, reifyEnv,
                          reifyFunDefn, reifyList, reifyRDataDefn, reifyRaw,
                          reifyReportPart, reifyReportParts, reifyTT, reifyTTName,
-                         reifyTyDecl, rFunArgToPArg, tacN
+                         reifyTyDecl, rFunArgToPArg, tacN,
+                         editN, reflectSExp, reifySExp
                          ) where
 
 import Idris.Core.Elaborate (claim, fill, focus, getNameFrom, initElaborator,
@@ -32,6 +33,7 @@ import Idris.AbsSyntaxTree (ArgOpt(..), ElabD, Fixity(..), IState(idris_datatype
                             PArg, PArg'(..), PTactic, PTactic'(..), PTerm(..),
                             initEState, pairCon, pairTy)
 import Idris.Delaborate (delab)
+import Idris.SExp
 
 import Control.Monad (liftM, liftM2, liftM4)
 import Control.Monad.State.Strict (lift)
@@ -150,6 +152,14 @@ reifyBool tm = fail $ "Not a Boolean: " ++ show tm
 reifyInt :: Term -> ElabD Int
 reifyInt (Constant (I i)) = return i
 reifyInt tm = fail $ "Not an Int: " ++ show tm
+
+reifyInteger :: Term -> ElabD Integer
+reifyInteger (Constant (BI i)) = return i
+reifyInteger tm = fail $ "Not an Integer: " ++ show tm
+
+reifyString :: Term -> ElabD String
+reifyString (Constant (Str s)) = return s
+reifyString tm = fail $ "Not a String: " ++ show tm
 
 reifyPair :: (Term -> ElabD a) -> (Term -> ElabD b) -> Term -> ElabD (a, b)
 reifyPair left right (App _ (App _ (App _ (App _ (P _ n _) _) _) x) y)
@@ -1228,3 +1238,29 @@ reflectFunDefn (RDefineFun name clauses) = raw_apply (Var $ tacN "DefineFun")
                                                                      (Var $ reflm "TT"))
                                                                (map reflectFunClause clauses)
                                                      ]
+
+editN :: String -> Name
+editN str = sNS (sUN str) ["Editor", "Reflection", "Language"]
+
+reflectBool :: Bool -> Raw
+reflectBool b = Var $ sNS (sUN $ if b then "True" else "False") ["Bool", "Prelude"] -- well I guess one can just use the Show instance, alas
+
+reflectMaybe :: Maybe Raw -> Raw -> Raw
+reflectMaybe (Just x) ty = RApp (RApp (Var $ sNS (sUN "Just") ["Maybe", "Prelude"]) ty) x
+reflectMaybe Nothing ty = RApp (Var $ sNS (sUN "Nothing") ["Maybe", "Prelude"]) ty
+
+reflectSExp :: SExp -> Raw
+reflectSExp (StringAtom s)  = RApp (Var $ editN "StringAtom")  $ RConstant (Str s)
+reflectSExp (SymbolAtom s)  = RApp (Var $ editN "SymbolAtom")  $ RConstant (Str s)
+reflectSExp (BoolAtom b)    = RApp (Var $ editN "BoolAtom")    $ reflectBool b
+reflectSExp (IntegerAtom i) = RApp (Var $ editN "IntegerAtom") $ RConstant (BI i)
+reflectSExp (SexpList l)    = RApp (Var $ editN "SExpList") $ reflectList (Var $ editN "SExp") (map reflectSExp l)
+
+reifySExp :: Term -> ElabD SExp
+reifySExp (App _ (P _ n _) x)
+  | n == editN "StringAtom"  = StringAtom  <$> reifyString x
+  | n == editN "SymbolAtom"  = SymbolAtom  <$> reifyString x
+  | n == editN "BoolAtom"    = BoolAtom    <$> reifyBool x
+  | n == editN "IntegerAtom" = IntegerAtom <$> reifyInteger x
+  | n == editN "SExpList"    = SexpList    <$> reifyList reifySExp x
+reifySExp tm = fail $ "Not an SExp: " ++ show tm

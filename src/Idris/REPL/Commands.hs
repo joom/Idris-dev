@@ -45,7 +45,7 @@ data Command = Quit
              | ListDynamic
              | Pattelab PTerm
              | Search [PkgName] PTerm
-             | ElabActionAt Int Name PTerm
+             | ElabEditAt Int Name [PTerm]
              | CaseSplitAt Bool Int Name
              | AddClauseFrom Bool Int Name
              | AddProofClauseFrom Bool Int Name

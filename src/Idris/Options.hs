@@ -19,7 +19,7 @@ module Idris.Options (Codegen(..), ConsoleWidth(..), HowMuchDocs(..), IRFormat(.
 
 import Data.Maybe
 import GHC.Generics (Generic)
-import IRTS.CodegenCommon (OutputType)
+import {-# SOURCE #-} IRTS.CodegenCommon (OutputType)
 import Network.Socket (PortNumber)
 
 data Opt = Filename String

@@ -14,7 +14,7 @@ Maintainer  : The Idris Community.
 module Idris.AbsSyntaxTree where
 
 import Idris.Core.Elaborate hiding (Tactic(..))
-import Idris.Core.Evaluate
+import {-# SOURCE #-} Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Docstrings
 import Idris.Options
@@ -561,6 +561,7 @@ data FnOpt = Inlinable -- ^ always evaluate when simplifying
            | ErrorReverse                   -- ^ attempt to reverse normalise before showing in error
            | ErrorReduce                    -- ^ unfold definition before showing an error
            | Reflection                     -- ^ a reflecting function, compile-time only
+           | EditorAction                   -- ^ a function meant to be used as an editor action
            | Specialise [(Name, Maybe Int)] -- ^ specialise it, freeze these names
            | Constructor -- ^ Data constructor type
            | AutoHint    -- ^ use in auto implicit search
