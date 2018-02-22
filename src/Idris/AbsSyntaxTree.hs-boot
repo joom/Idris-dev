@@ -12,6 +12,8 @@ type ElabD a = Elab' EState a
 
 data ElabInfo
 
+constraintNS :: ElabInfo -> String
+
 toplevel :: ElabInfo
 
 data PTerm

@@ -3,7 +3,6 @@ module Language.Reflection.Editor
 import Language.Reflection
 import Language.Reflection.Elab
 import Language.Reflection.Errors
-import Language.Reflection.Utils
 
 %access public export
 
@@ -22,6 +21,9 @@ interface Editorable a where
   fromEditor : SExp -> Maybe a
   toEditor : a -> SExp
 
+-- These primitives should never appear when we are normalizing terms
+-- when we run tactics in the editor or when we use Editorable in the REPL.
+-- However, they will appear when we run the compiled program
 postulate private primFrom : SExp -> Maybe a
 postulate private primTo : a -> SExp
 

@@ -33,6 +33,7 @@ module Idris.Core.Evaluate(normalise, normaliseTrace, normaliseC,
                 visibleDefinitions,
                 isUniverse, linearCheck, linearCheckArg) where
 
+import {-# SOURCE #-} Idris.AbsSyntax
 import {-# SOURCE #-} Idris.AbsSyntaxTree
 import Idris.Core.CaseTree
 import Idris.Core.TT
@@ -380,31 +381,27 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
              Left err -> fail $ "parser error" -- TODO fix
              -- 1) Parsed the surface syntax
              Right pterm -> do
-               case elaborate "(toplevel)" initContext emptyContext
+               let pterm' = addImpl [] idrisInit pterm -- TODO why
+               case elaborate (constraintNS toplevel) ctxt emptyContext
                           0 (sMN 0 "toRaw") Erased initEState
-                          (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
+                          (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm') of
+                 Error err -> fail $ "elaboration failed:" ++ show err
                  OK (result, _) -> do
                    -- 2) Elaborated that into the core language
                    let tm = resultTerm result
                    -- 3) Reflect that to Raw in the core language
                    let reflected = reflect tm
                    -- 4) Typecheck the reflected term from Raw to TT
-                   case check initContext [] reflected of
+                   case check ctxt [] reflected of
+                     Error err -> fail $ "check failed:" ++ show err
                    -- 5) Return the TT as a value
                      OK (tmReflected, _) ->
-                       return (toValue initContext [] tmReflected)
-                     Error err -> fail $ show err
-                 Error err -> fail $ show err
-       | n == editN "fromEditor" && tyN == reflm "Raw" =
-         handle $ \s -> do
-           case parseExpr idrisInit s of
-             Left err -> fail $ "parser error" -- TODO fix
-             Right pterm -> do
-               undefined
+                       return (toValue ctxt [] tmReflected)
+       | n == editN "fromEditor" && tyN == reflm "Raw" = undefined
       where
         handle :: (String -> ElabD Value) -> Eval Value
         handle f =
-          case elaborate "(toplevel)" initContext emptyContext 0
+          case elaborate "(toplevel)" ctxt emptyContext 0
                   (sMN 0 "evalElab") Erased initEState
                   (reifySExp arg >>= \case
                       StringAtom s -> f s
