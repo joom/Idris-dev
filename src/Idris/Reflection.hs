@@ -20,7 +20,7 @@ module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          reifyFunDefn, reifyList, reifyRDataDefn, reifyRaw,
                          reifyReportPart, reifyReportParts, reifyTT, reifyTTName,
                          reifyTyDecl, rFunArgToPArg, tacN,
-                         editN, reflectSExp, reifySExp
+                         editN, reflectSExp, reifySExp, reflectMaybe
                          ) where
 
 import Idris.Core.Elaborate (claim, fill, focus, getNameFrom, initElaborator,
@@ -1243,7 +1243,7 @@ editN :: String -> Name
 editN str = sNS (sUN str) ["Editor", "Reflection", "Language"]
 
 reflectBool :: Bool -> Raw
-reflectBool b = Var $ sNS (sUN $ if b then "True" else "False") ["Bool", "Prelude"] -- well I guess one can just use the Show instance, alas
+reflectBool b = Var $ sNS (sUN $ show b) ["Bool", "Prelude"]
 
 reflectMaybe :: Maybe Raw -> Raw -> Raw
 reflectMaybe (Just x) ty = RApp (RApp (Var $ sNS (sUN "Just") ["Maybe", "Prelude"]) ty) x

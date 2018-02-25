@@ -13,3 +13,4 @@ reflm :: String -> Name
 reifySExp :: Term -> ElabD SExp
 
 reflect :: Term -> Raw
+reflectMaybe :: Maybe Raw -> Raw -> Raw

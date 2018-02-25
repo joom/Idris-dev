@@ -374,11 +374,11 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
     -- it is applied to SExps that represent things of primitive core language types
     -- such as TTName, TT, TyDecl, DataDefn, FunDefn, FunClause
       -- TODO check if ty evaluates to ..
-    ev ntimes stk top env (App _ (App _ (App _ (P _ n _) (P _ tyN _)) _) arg)
+    ev ntimes stk top env (App _ (App _ (App _ (P _ n _) ty@(P _ tyN _)) _) arg)
        | n == editN "fromEditor" && tyN == reflm "TT" =
          handle $ \s ->
            case parseExpr idrisInit s of
-             Left err -> fail $ "parser error" -- TODO fix
+             Left err -> fail $ "parser error" -- TODO fix / return Nothing
              -- 1) Parsed the surface syntax
              Right pterm -> do
                let pterm' = addImpl [] idrisInit pterm -- TODO why
@@ -389,26 +389,31 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
                  OK (result, _) -> do
                    -- 2) Elaborated that into the core language
                    let tm = resultTerm result
-                   -- 3) Reflect that to Raw in the core language
-                   let reflected = reflect tm
+                   -- 3) Reflect that to Raw in the core language and add Just
+                   let reflected = reflectMaybe (Just (reflect tm)) (forget ty)
                    -- 4) Typecheck the reflected term from Raw to TT
                    case check ctxt [] reflected of
-                     Error err -> fail $ "check failed:" ++ show err
+                     Error err -> nothingOfTy
                    -- 5) Return the TT as a value
                      OK (tmReflected, _) ->
                        return (toValue ctxt [] tmReflected)
-       | n == editN "fromEditor" && tyN == reflm "Raw" = undefined
+       -- | n == editN "fromEditor" && tyN == reflm "Raw" = undefined
       where
         handle :: (String -> ElabD Value) -> Eval Value
-        handle f =
+        handle f = do
+          argValue <- ev ntimes stk top env arg
           case elaborate "(toplevel)" ctxt emptyContext 0
                   (sMN 0 "evalElab") Erased initEState
                   (reifySExp arg >>= \case
                       StringAtom s -> f s
-                      _ -> fail $ "Not StringAtom in fromEditor of TT") of
+                      _ -> nothingOfTy) of
             Error err -> fail $ show err -- TODO fix
             OK (v, _) -> return v
 
+        nothingOfTy :: Monad m => m Value
+        nothingOfTy = case check ctxt [] (reflectMaybe Nothing (forget ty)) of
+          OK (tm, _) -> return $ toValue ctxt [] tm
+          Error err -> fail $ "Can't type check Nothing: " ++ show err
 
     ev ntimes stk top env (App _ f a)
            = do f' <- ev ntimes stk False env f
