@@ -365,8 +365,7 @@ runIdeModeCommand h id orig fn mods (IdeMode.DocsFor name w) =
   where howMuch IdeMode.Overview = OverviewDocs
         howMuch IdeMode.Full     = FullDocs
 runIdeModeCommand h id orig fn mods (IdeMode.ElabEdit name args line) =
-  do args' <- convertSExpArgs (sUN name) args
-     process fn (ElabEditAt line (sUN name) args')
+  process fn (ElabEditAt (sUN name) args line)
 runIdeModeCommand h id orig fn mods (IdeMode.CaseSplit line name) =
   process fn (CaseSplitAt False line (sUN name))
 runIdeModeCommand h id orig fn mods (IdeMode.AddClause line name) =
@@ -1144,9 +1143,8 @@ process fn (DebugInfo n)
                                    iputStrLn (show cg')
         when (not (null fn)) $ iputStrLn (show fn)
 process fn (Search pkgs t) = searchByType pkgs t
-process fn (ElabEditAt updatefile l pterm)
-   = undefined -- TODO elab
-    -- = elabEditAt fn updatefile l pterm
+process fn (ElabEditAt actionName sexps l)
+    = elabEditAt fn actionName l sexps
 process fn (CaseSplitAt updatefile l n)
     = caseSplitAt fn updatefile l n
 process fn (AddClauseFrom updatefile l n)

@@ -404,7 +404,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
           argValue <- ev ntimes stk top env arg
           case elaborate "(toplevel)" ctxt emptyContext 0
                   (sMN 0 "evalElab") Erased initEState
-                  (reifySExp arg >>= \case
+                  (reifySExp (quoteTerm argValue) >>= \case
                       StringAtom s -> f s
                       _ -> nothingOfTy) of
             Error err -> fail $ show err -- TODO fix

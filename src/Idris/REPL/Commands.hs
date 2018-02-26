@@ -4,6 +4,7 @@ import Idris.AbsSyntaxTree
 import Idris.Colours
 import Idris.Core.TT
 import Idris.Imports
+import Idris.SExp
 import Idris.Options
 
 -- | REPL commands
@@ -45,7 +46,7 @@ data Command = Quit
              | ListDynamic
              | Pattelab PTerm
              | Search [PkgName] PTerm
-             | ElabEditAt Int Name [PTerm]
+             | ElabEditAt Name [SExp] Int
              | CaseSplitAt Bool Int Name
              | AddClauseFrom Bool Int Name
              | AddProofClauseFrom Bool Int Name
