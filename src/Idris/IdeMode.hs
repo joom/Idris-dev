@@ -7,7 +7,7 @@ Maintainer  : The Idris Community.
 -}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
-module Idris.IdeMode(parseMessage, convSExp, WhatDocs(..), IdeModeCommand(..), sexpToCommand, toSExp, SExp(..), SExpable, Opt(..), ideModeEpoch, getLen, getNChar, sExpToString) where
+module Idris.IdeMode(WhatDocs(..), IdeModeCommand(..), sexpToCommand, Opt(..), ideModeEpoch, getLen, getNChar) where
 
 import Idris.Core.Binary ()
 import Idris.Core.TT

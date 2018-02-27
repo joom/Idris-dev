@@ -26,6 +26,7 @@ import Idris.ElabDecls
 import Idris.Error
 import Idris.ErrReverse
 import Idris.IdeMode hiding (IdeModeCommand(..))
+import Idris.SExp
 import Idris.Prover
 import Idris.Reflection
 import Idris.Output

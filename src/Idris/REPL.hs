@@ -65,6 +65,7 @@ import Idris.ErrReverse
 import Idris.Help
 import Idris.IBC
 import qualified Idris.IdeMode as IdeMode
+import qualified Idris.SExp as IdeMode
 import Idris.IdrisDoc
 import Idris.Info
 import Idris.Inliner

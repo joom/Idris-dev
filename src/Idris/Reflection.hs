@@ -20,7 +20,7 @@ module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          reifyFunDefn, reifyList, reifyRDataDefn, reifyRaw,
                          reifyReportPart, reifyReportParts, reifyTT, reifyTTName,
                          reifyTyDecl, rFunArgToPArg, tacN,
-                         editN, reflectSExp, reifySExp, reflectMaybe
+                         editN, reflectSExp, reifySExp, reflectMaybe, reifyMaybe
                          ) where
 
 import Idris.Core.Elaborate (claim, fill, focus, getNameFrom, initElaborator,
@@ -1248,6 +1248,13 @@ reflectBool b = Var $ sNS (sUN $ show b) ["Bool", "Prelude"]
 reflectMaybe :: Maybe Raw -> Raw -> Raw
 reflectMaybe (Just x) ty = RApp (RApp (Var $ sNS (sUN "Just") ["Maybe", "Prelude"]) ty) x
 reflectMaybe Nothing ty = RApp (Var $ sNS (sUN "Nothing") ["Maybe", "Prelude"]) ty
+
+reifyMaybe :: Term -> ElabD (Maybe Term)
+reifyMaybe (App _ (P _ n _) ty)
+  | n == sNS (sUN "Nothing") ["Maybe", "Prelude"] = return Nothing
+reifyMaybe (App _ (App _ (P _ n _) ty) x)
+  | n == sNS (sUN "Just") ["Maybe", "Prelude"] = return (Just x)
+reifyMaybe _ = fail "Not Just or Nothing"
 
 reflectSExp :: SExp -> Raw
 reflectSExp (StringAtom s)  = RApp (Var $ editN "StringAtom")  $ RConstant (Str s)

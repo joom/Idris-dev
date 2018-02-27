@@ -25,6 +25,7 @@ import Idris.Delaborate
 import Idris.Docstrings
 import Idris.IdeMode
 import Idris.Options
+import Idris.SExp
 
 import Util.Pretty
 import Util.ScreenSize (getScreenWidth)

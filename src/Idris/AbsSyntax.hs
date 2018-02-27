@@ -19,8 +19,8 @@ import Idris.Colours
 import Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Docstrings
-import Idris.IdeMode hiding (Opt(..))
 import Idris.Options
+import Idris.SExp
 import IRTS.CodegenCommon
 
 import System.Directory (canonicalizePath, doesFileExist)

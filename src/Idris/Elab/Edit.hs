@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-|
 Module      : Idris.Elab.Edit
 Description : Handles editor interaction with Elab actions.
@@ -12,11 +13,11 @@ import Idris.Delaborate
 import Idris.Core.Evaluate
 import Idris.Core.Elaborate
 import Idris.Core.TT
+import Idris.Core.Typecheck
 import Idris.Elab.Term
-import Idris.Elab.Value
 import Idris.Error
-import Idris.IdeMode
 import Idris.Reflection
+import Idris.SExp
 import Idris.Output
 
 -- | Collect the non-arrow types in a given type.
@@ -33,7 +34,7 @@ elabEditAt
   -> Int -- ^ The line number the action is run on
   -> [SExp] -- ^ The tactic expression, of type 'Elab a' for some 'a'.
   -> Idris ()
-elabEditAt fn name l args = do
+elabEditAt fn name l args =
   do ctxt <- getContext
      ist <- getIState
      -- 1) lookup the name and type of the editor action
@@ -53,20 +54,22 @@ elabEditAt fn name l args = do
             ++ ") given arguments (" ++ show countArgs ++ ")"
      -- 4) call fromEditor for each of the SExps and get Terms
      --   * reflect Haskell SExps to Idris SExp ASTs
-     let zipped = zip collected args
+     rawArgs <- forM (zip collected args) $ \(argTy, sexp) -> do
+         let from = raw_apply (Var $ editN "fromEditor") [forget argTy, reflectSExp sexp]
+         (tm, maybeTy) <- tclift $ check ctxt [] from
+         (tm', _) <- tclift $ elaborate "(toplevel)" ctxt emptyContext 0 (sMN 0 "editElab")
+            Erased initEState (reifyMaybe tm >>=
+              \case Just x -> return x ; _ -> fail "Nothing")
+         return $ forget $ normalise ctxt [] tm'
      -- 5) build up a Term which is a function application
      --    of the original tactic and all the functions
-     undefined
-     -- case parseExpr i term of
-     --   Left err -> iPrintError . show . parseErrorDoc $ err
-     --   Right t -> return [t] -- process fn (ElabEditAt line (sUN name) t)
-
-
-     -- (tm, ty) <- elabVal toplevel ERHS pterm
-     -- (tm', _) <- tclift $ elaborate "(toplevel)" ctxt (idris_datatypes ist)
-     --         (idris_name ist) (sMN 0 "elabAction") ty initEState
-     --         (transformErr RunningElabScript
-     --         (erun NoFC (runElabAction toplevel ist NoFC [] tm [] >>= reifyTT)))
-     -- let pterm' = delabSugared ist (inlineSmall ctxt [] tm')
-     -- iRenderResult $ prettyIst ist pterm'
-
+     let app = raw_apply (Var ns) rawArgs
+     (app', _) <- tclift $ check ctxt [] app
+    -- 6) run the tactic
+     (res, _) <- tclift $ elaborate "(toplevel)" ctxt emptyContext 0 (sMN 0 "editElab")
+            Erased initEState (runElabAction toplevel ist NoFC [] app' [] >>= reifyTT)
+            -- TODO fix reifyTT!!! It doesn't have to be TT. take toEditor into account!
+     -- 7) delaborate into a PTerm
+     let pterm = delabSugared ist (inlineSmall ctxt [] res)
+     -- 8) pretty print the result
+     iRenderResult $ prettyIst ist pterm
