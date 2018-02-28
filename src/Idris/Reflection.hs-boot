@@ -8,6 +8,7 @@ import Idris.SExp
 -- for edit-time tactics
 
 editN :: String -> Name
+editNS :: Name -> Name
 reflm :: String -> Name
 
 reifySExp :: Term -> ElabD SExp

@@ -366,7 +366,7 @@ runIdeModeCommand h id orig fn mods (IdeMode.DocsFor name w) =
   where howMuch IdeMode.Overview = OverviewDocs
         howMuch IdeMode.Full     = FullDocs
 runIdeModeCommand h id orig fn mods (IdeMode.ElabEdit name args line) =
-  process fn (ElabEditAt (sUN name) args line)
+  process fn (ElabEditAt name args line)
 runIdeModeCommand h id orig fn mods (IdeMode.CaseSplit line name) =
   process fn (CaseSplitAt False line (sUN name))
 runIdeModeCommand h id orig fn mods (IdeMode.AddClause line name) =

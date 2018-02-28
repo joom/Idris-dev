@@ -20,7 +20,7 @@ module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          reifyFunDefn, reifyList, reifyRDataDefn, reifyRaw,
                          reifyReportPart, reifyReportParts, reifyTT, reifyTTName,
                          reifyTyDecl, rFunArgToPArg, tacN,
-                         editN, reflectSExp, reifySExp, reflectMaybe, reifyMaybe
+                         editN, editNS, reflectSExp, reifySExp, reflectMaybe, reifyMaybe
                          ) where
 
 import Idris.Core.Elaborate (claim, fill, focus, getNameFrom, initElaborator,
@@ -1241,6 +1241,9 @@ reflectFunDefn (RDefineFun name clauses) = raw_apply (Var $ tacN "DefineFun")
 
 editN :: String -> Name
 editN str = sNS (sUN str) ["Editor", "Reflection", "Language"]
+
+editNS :: Name -> Name
+editNS n = NS n $ map T.pack ["Editor", "Reflection", "Language"]
 
 reflectBool :: Bool -> Raw
 reflectBool b = Var $ sNS (sUN $ show b) ["Bool", "Prelude"]
