@@ -56,10 +56,21 @@ implementation Editorable Unit where
   fromEditor _ = Nothing
   toEditor () = SExpList []
 
+implementation Editorable Void where
+  fromEditor _ = Nothing
+  toEditor _ impossible
+
 implementation Editorable String where
   fromEditor (StringAtom s) = Just s
   fromEditor _ = Nothing
   toEditor = StringAtom
+
+implementation Editorable Char where
+  fromEditor (StringAtom s) = case unpack s of
+                                   [c] => Just c
+                                   _ => Nothing
+  fromEditor _ = Nothing
+  toEditor c = StringAtom (pack [c])
 
 implementation Editorable Integer where
   fromEditor (IntegerAtom n) = Just n
@@ -104,3 +115,10 @@ implementation (Editorable a, Editorable b) => Editorable (a, b) where
   fromEditor (SExpList [x, y]) = MkPair <$> fromEditor x <*> fromEditor y
   fromEditor _ = Nothing
   toEditor (x, y) = SExpList [toEditor x, toEditor y]
+
+implementation Editorable SourceLocation where
+  fromEditor (SExpList [SymbolAtom "FileLoc", x, y, z]) =
+    FileLoc <$> fromEditor x <*> fromEditor y <*> fromEditor z
+  fromEditor _ = Nothing
+  toEditor (FileLoc x y z) =
+    SExpList [SymbolAtom "FileLoc", toEditor x, toEditor y, toEditor z]
