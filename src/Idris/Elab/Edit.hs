@@ -10,6 +10,7 @@ module Idris.Elab.Edit where
 import Control.Monad
 import Data.List.Split
 import qualified Data.Text as T
+import System.IO
 
 import Idris.AbsSyntax
 import Idris.Delaborate
@@ -77,11 +78,11 @@ elabEditAt fn nameStr l args =
      -- 4) call fromEditor for each of the SExps and get Terms
      --   * reflect Haskell SExps to Idris SExp ASTs
      rawArgs <- forM (zip collected args) $ \(argTy, sexp) -> do
-         (sexpTT, _) <- tclift $ check ctxt [] (reflectSExp sexp)
-         let sexpPTerm = delab ist sexpTT
+         sexpPTerm <- tclift $ (delab ist . fst) <$> check ctxt [] (reflectSExp sexp)
          let pterm = PApp NoFC (PRef NoFC [] (editN "fromEditor"))
                                [ PImp 1 True [] (sUN "a") (delab ist argTy)
                                , PExp 1 [] (sMN 0 "arg") sexpPTerm ]
+         -- Elaborate `pterm` into TT for interface resolution
          (tm, _) <- elabVal toplevel ERHS pterm
          let tm' = normalise ctxt [] tm
          (tm'', _) <- tclift $ elaborate "(toplevel)" ctxt
@@ -91,17 +92,26 @@ elabEditAt fn nameStr l args =
          return $ forget tm''
      -- 5) build up a Term which is a function application
      --    of the original tactic and all the functions
-     let app = raw_apply (Var ns) rawArgs
-     (app', _) <- tclift $ check ctxt [] app
+     (app, _) <- tclift $ check ctxt [] (raw_apply (Var ns) rawArgs)
     -- 6) run the tactic
      (res, _) <- tclift $ elaborate "(toplevel)" ctxt
                    (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
                    Erased initEState
-                   (runElabAction toplevel ist NoFC [] app' [] >>= reifyTT)
-            -- TODO fix reifyTT!!! It doesn't have to be TT. take toEditor into account!
+                   (runElabAction toplevel ist NoFC [] app [])
+     -- 7) call toEditor on the result
      lastTyInElab <- tyInElab (last collected)
-     -- 7) delaborate into a PTerm
-     -- iputStrLn $ show res
-     let pterm = delabSugared ist (inlineSmall ctxt [] res)
-     -- 8) pretty print the result
-     iRenderResult $ prettyIst ist pterm
+     let pterm = PApp NoFC (PRef NoFC [] (editN "toEditor"))
+                               [ PImp 1 True [] (sUN "a") (delab ist lastTyInElab)
+                               , PExp 1 [] (sMN 0 "arg") (delab ist res) ]
+     (tm, _) <- elabVal toplevel ERHS pterm
+     let tm' = normalise ctxt [] tm
+     -- reify the SExp TT term into a Haskell SExp
+     (resSExp, _) <- tclift $ elaborate "(toplevel)" ctxt
+       (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
+       Erased initEState (reifySExp tm')
+     -- send it back to the editor
+     case idris_outputmode ist of
+       RawOutput _ -> fail "Not in IDE mode"
+       IdeMode n h -> do
+         runIO . hPutStrLn h $ convSExp "return"
+           [SymbolAtom "ok", resSExp, SexpList []] n

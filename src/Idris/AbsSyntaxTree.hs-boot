@@ -21,3 +21,9 @@ data PTerm
 data FnOpt
 
 type FnOpts = [FnOpt]
+
+data PPOption
+
+defaultPPOption :: PPOption
+
+showTmOpts' :: PPOption -> PTerm -> String

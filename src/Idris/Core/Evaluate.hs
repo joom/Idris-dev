@@ -37,6 +37,7 @@ import {-# SOURCE #-} Idris.AbsSyntax
 import {-# SOURCE #-} Idris.AbsSyntaxTree
 import Idris.Core.CaseTree
 import Idris.Core.TT
+import {-# SOURCE #-} Idris.Delaborate
 import {-# SOURCE #-} Idris.Elab.Term
 import {-# SOURCE #-} Idris.Core.Elaborate
 import {-# SOURCE #-} Idris.Core.Typecheck
@@ -381,10 +382,9 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
              Left err -> fail $ "parser error" -- TODO fix / return Nothing
              -- 1) Parsed the surface syntax
              Right pterm -> do
-               let pterm' = addImpl [] idrisInit pterm -- TODO why
                case elaborate (constraintNS toplevel) ctxt emptyContext
                           0 (sMN 0 "toRaw") Erased initEState
-                          (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm') of
+                          (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
                  Error err -> fail $ "elaboration failed:" ++ show err
                  OK (result, _) -> do
                    -- 2) Elaborated that into the core language
@@ -414,6 +414,21 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
         nothingOfTy = case check ctxt [] (reflectMaybe Nothing (forget ty)) of
           OK (tm, _) -> return $ toValue ctxt [] tm
           Error err -> fail $ "Can't type check Nothing: " ++ show err
+
+    -- Override toEditor
+    ev ntimes stk top env (App _ (App _ (App _ (P _ n _) ty@(P _ tyN _)) _) arg)
+       | n == editN "toEditor" && tyN == reflm "TT" =
+       do argValue <- ev ntimes stk top env arg
+          case elaborate "(toplevel)" ctxt emptyContext 0
+                  (sMN 0 "evalElab") Erased initEState
+                  (reifyTT (quoteTerm argValue)) of
+            Error err -> fail $ show err -- TODO fix
+            OK (v, _) -> do
+              let pterm = delabSugared idrisInit (inlineSmall ctxt [] v)
+              let s = showTmOpts' defaultPPOption pterm
+              case check ctxt [] (reflectSExp (StringAtom s)) of
+                Error err -> fail $ show err
+                OK (tm, _) -> return $ toValue ctxt [] tm
 
     ev ntimes stk top env (App _ f a)
            = do f' <- ev ntimes stk False env f

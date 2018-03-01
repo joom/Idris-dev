@@ -12,6 +12,8 @@ editNS :: Name -> Name
 reflm :: String -> Name
 
 reifySExp :: Term -> ElabD SExp
+reifyTT :: Term -> ElabD Term
 
 reflect :: Term -> Raw
 reflectMaybe :: Maybe Raw -> Raw -> Raw
+reflectSExp :: SExp -> Raw

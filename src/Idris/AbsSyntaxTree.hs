@@ -2232,6 +2232,9 @@ showTmImpls = flip (displayS . renderCompact . prettyImp verbosePPOption) ""
 showTmOpts :: PPOption -> PTerm -> String
 showTmOpts opt = flip (displayS . renderPretty 1.0 10000000 . prettyImp opt) ""
 
+-- | Show a term with specific options, no colours
+showTmOpts' :: PPOption -> PTerm -> String
+showTmOpts' opt = flip (displayS . renderCompact . prettyImp opt) ""
 
 instance Sized PTerm where
   size (PQuote rawTerm)               = size rawTerm
