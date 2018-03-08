@@ -12,6 +12,24 @@ data SExp =
    SExpList (List SExp) | StringAtom String | BoolAtom Bool |
    IntegerAtom Integer | SymbolAtom String
 
+implementation Quotable SExp TT where
+  quotedTy = `(SExp)
+  quote (SExpList xs) = assert_total `(SExpList ~(quote xs))
+  quote (StringAtom s) = `(StringAtom ~(quote s))
+  quote (SymbolAtom s) = `(SymbolAtom ~(quote s))
+  quote (BoolAtom True) = `(BoolAtom True)
+  quote (BoolAtom False) = `(BoolAtom False)
+  quote (IntegerAtom i) = `(IntegerAtom ~(quote i))
+
+implementation Quotable SExp Raw where
+  quotedTy = `(SExp)
+  quote (SExpList xs) = assert_total `(SExpList ~(quote xs))
+  quote (StringAtom s) = `(StringAtom ~(quote s))
+  quote (SymbolAtom s) = `(SymbolAtom ~(quote s))
+  quote (BoolAtom True) = `(BoolAtom True)
+  quote (BoolAtom False) = `(BoolAtom False)
+  quote (IntegerAtom i) = `(IntegerAtom ~(quote i))
+
 ||| Limits the types that the compiler knows how to specially serialize
 ||| into S-expressions. It is different from the compiler's `SExpable`
 ||| in that certain reflection types like `TTName`, `TT`, `TyDecl`, `DataDefn`,
@@ -24,32 +42,32 @@ interface Editorable a where
 -- These primitives should never appear when we are normalizing terms
 -- when we run tactics in the editor or when we use Editorable in the REPL.
 -- However, they will appear when we run the compiled program
-postulate private primFrom : SExp -> Maybe a
-postulate private primTo : a -> SExp
+postulate private prim__fromEditor : SExp -> Maybe a
+postulate private prim__toEditor : a -> SExp
 
 implementation Editorable TTName where
-  fromEditor = primFrom
-  toEditor   = primTo
+  fromEditor x = prim__fromEditor x
+  toEditor   x = prim__toEditor x
 
 implementation Editorable TT where
-  fromEditor = primFrom
-  toEditor   = primTo
+  fromEditor x = prim__fromEditor x
+  toEditor   x = prim__toEditor x
 
 implementation Editorable TyDecl where
-  fromEditor = primFrom
-  toEditor   = primTo
+  fromEditor x = prim__fromEditor x
+  toEditor   x = prim__toEditor x
 
 implementation Editorable DataDefn where
-  fromEditor = primFrom
-  toEditor   = primTo
+  fromEditor x = prim__fromEditor x
+  toEditor   x = prim__toEditor x
 
 implementation Editorable a => Editorable (FunDefn a) where
-  fromEditor = primFrom
-  toEditor   = primTo
+  fromEditor x = prim__fromEditor x
+  toEditor   x = prim__toEditor x
 
 implementation Editorable a => Editorable (FunClause a) where
-  fromEditor = primFrom
-  toEditor   = primTo
+  fromEditor x = prim__fromEditor x
+  toEditor   x = prim__toEditor x
 
 implementation Editorable Unit where
   fromEditor (SExpList []) = Just ()

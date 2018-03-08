@@ -197,7 +197,7 @@ rt_simplify ctxt env t
 -- | Unfold the given names in a term, the given number of times in a stack.
 -- Preserves 'let'.
 -- This is primarily to support inlining of the given names, and can also
--- help with partial evaluation by allowing a rescursive definition to be
+-- help with partial evaluation by allowing a recursive definition to be
 -- unfolded once only.
 -- Specifically used to unfold definitions using interfaces before going to
 -- the totality checker (otherwise mutually recursive definitions in
@@ -376,7 +376,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
     -- such as TTName, TT, TyDecl, DataDefn, FunDefn, FunClause
       -- TODO check if ty evaluates to ..
     ev ntimes stk top env (App _ (App _ (App _ (P _ n _) ty@(P _ tyN _)) _) arg)
-       | n == editN "fromEditor" && tyN == reflm "TT" =
+       | n == editN "fromEditor" && tyN == reflm "TT" && not (simpl || unfold) =
          handle $ \s ->
            case parseExpr idrisInit s of
              Left err -> fail $ "parser error" -- TODO fix / return Nothing
@@ -402,7 +402,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
         handle :: (String -> ElabD Value) -> Eval Value
         handle f = do
           argValue <- ev ntimes stk top env arg
-          case elaborate "(toplevel)" ctxt emptyContext 0
+          case elaborate (constraintNS toplevel) ctxt emptyContext 0
                   (sMN 0 "evalElab") Erased initEState
                   (reifySExp (quoteTerm argValue) >>= \case
                       StringAtom s -> f s
@@ -417,14 +417,14 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
 
     -- Override toEditor
     ev ntimes stk top env (App _ (App _ (App _ (P _ n _) ty@(P _ tyN _)) _) arg)
-       | n == editN "toEditor" && tyN == reflm "TT" =
+       | n == editN "toEditor" && tyN == reflm "TT" && not (simpl || unfold) =
        do argValue <- ev ntimes stk top env arg
-          case elaborate "(toplevel)" ctxt emptyContext 0
+          case elaborate (constraintNS toplevel) ctxt emptyContext 0
                   (sMN 0 "evalElab") Erased initEState
                   (reifyTT (quoteTerm argValue)) of
             Error err -> fail $ show err -- TODO fix
             OK (v, _) -> do
-              let pterm = delabSugared idrisInit (inlineSmall ctxt [] v)
+              let pterm = delabSugared idrisInit v
               let s = showTmOpts' defaultPPOption pterm
               case check ctxt [] (reflectSExp (StringAtom s)) of
                 Error err -> fail $ show err
