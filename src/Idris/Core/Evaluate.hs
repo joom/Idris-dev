@@ -7,7 +7,7 @@ Maintainer  : The Idris Community.
 -}
 
 {-# LANGUAGE BangPatterns, DeriveGeneric, FlexibleInstances,
-             MultiParamTypeClasses, PatternGuards, LambdaCase #-}
+             MultiParamTypeClasses, PatternGuards, LambdaCase, TupleSections #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# OPTIONS_GHC -fwarn-unused-imports #-}
 
@@ -160,14 +160,16 @@ specialise ctxt env limits t
 -- inline, and lets
 simplify :: Context -> Env -> TT Name -> TT Name
 simplify ctxt env t
-   = evalState (do val <- eval False ctxt [(sUN "lazy", 0),
+   = evalState (do val <- eval False ctxt ([(sUN "lazy", 0),
                                            (sUN "force", 0),
                                            (sUN "Force", 0),
                                            (sUN "assert_smaller", 0),
                                            (sUN "assert_total", 0),
                                            (sUN "par", 0),
                                            (sUN "prim__syntactic_eq", 0),
-                                           (sUN "fork", 0)]
+                                           (sUN "fork", 0)] ++
+                                           map (, 0) fromEditorNames ++
+                                           map (, 0) toEditorNames)
                                  (map finalEntry env) (finalise t)
                                  [Simplify True]
                    quote 0 val) initEval
@@ -184,12 +186,14 @@ inlineSmall ctxt env t
 -- | Simplify for run-time (i.e. basic inlining)
 rt_simplify :: Context -> Env -> TT Name -> TT Name
 rt_simplify ctxt env t
-   = evalState (do val <- eval False ctxt [(sUN "lazy", 0),
+   = evalState (do val <- eval False ctxt ([(sUN "lazy", 0),
                                            (sUN "force", 0),
                                            (sUN "Force", 0),
                                            (sUN "par", 0),
                                            (sUN "prim__syntactic_eq", 0),
-                                           (sUN "prim_fork", 0)]
+                                           (sUN "prim_fork", 0)] ++
+                                           map (, 0) fromEditorNames ++
+                                           map (, 0) toEditorNames)
                                  (map finalEntry env) (finalise t)
                                  [RunTT]
                    quote 0 val) initEval
@@ -252,6 +256,10 @@ setBlock b = do ES ls num _ <- get
 deduct = fnCount 1
 reinstate = fnCount (-1)
 
+editorablePrimitiveTypes = ["TT", "TyDecl", "DataDefn", "FunDefnTT", "FunClauseTT"]
+fromEditorNames = map (sUN . ("prim__fromEditor" ++)) editorablePrimitiveTypes
+toEditorNames   = map (sUN . ("prim__toEditor" ++)) editorablePrimitiveTypes
+
 -- | Evaluate in a context of locally named things (i.e. not de Bruijn indexed,
 -- such as we might have during construction of a proof)
 
@@ -270,6 +278,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
     unfold = Unfold `elem` opts
 
     noFree = all canonical . map snd
+    toBlock = [sUN "prim__syntactic_eq"] ++ fromEditorNames ++ toEditorNames
 
     -- returns 'True' if the function should block
     -- normal evaluation should return false
@@ -279,7 +288,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
                        else not (inl || dict) || elem n stk
        | simpl
            = (not inl || elem n stk)
-             || (n == sUN "prim__syntactic_eq")
+             || n `elem` toBlock
        | otherwise = False
 
     getCases cd | simpl = cases_compiletime cd
@@ -369,67 +378,6 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
        | Just (CaseOp _ _ _ _ _ _, _) <- lookupDefAccExact n (spec || (atRepl && noFree env)|| runtime) ctxt,
          at == txt "assert_total" && not (simpl || unfold)
             = ev ntimes (n : stk) top env arg
-
-    -- TODO elab
-    -- Treat "fromEditor" specially, as long as it's defined and
-    -- it is applied to SExps that represent things of primitive core language types
-    -- such as TTName, TT, TyDecl, DataDefn, FunDefn, FunClause
-      -- TODO check if ty evaluates to ..
-    ev ntimes stk top env (App _ (App _ (App _ (P _ n _) ty@(P _ tyN _)) _) arg)
-       | n == editN "fromEditor" && tyN == reflm "TT" && not (simpl || unfold) =
-         handle $ \s ->
-           case parseExpr idrisInit s of
-             Left err -> fail $ "parser error" -- TODO fix / return Nothing
-             -- 1) Parsed the surface syntax
-             Right pterm -> do
-               case elaborate (constraintNS toplevel) ctxt emptyContext
-                          0 (sMN 0 "toRaw") Erased initEState
-                          (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
-                 Error err -> fail $ "elaboration failed:" ++ show err
-                 OK (result, _) -> do
-                   -- 2) Elaborated that into the core language
-                   let tm = resultTerm result
-                   -- 3) Reflect that to Raw in the core language and add Just
-                   let reflected = reflectMaybe (Just (reflect tm)) (forget ty)
-                   -- 4) Typecheck the reflected term from Raw to TT
-                   case check ctxt [] reflected of
-                     Error err -> nothingOfTy
-                   -- 5) Return the TT as a value
-                     OK (tmReflected, _) ->
-                       return (toValue ctxt [] tmReflected)
-       -- | n == editN "fromEditor" && tyN == reflm "Raw" = undefined
-      where
-        handle :: (String -> ElabD Value) -> Eval Value
-        handle f = do
-          argValue <- ev ntimes stk top env arg
-          case elaborate (constraintNS toplevel) ctxt emptyContext 0
-                  (sMN 0 "evalElab") Erased initEState
-                  (reifySExp (quoteTerm argValue) >>= \case
-                      StringAtom s -> f s
-                      _ -> nothingOfTy) of
-            Error err -> fail $ show err -- TODO fix
-            OK (v, _) -> return v
-
-        nothingOfTy :: Monad m => m Value
-        nothingOfTy = case check ctxt [] (reflectMaybe Nothing (forget ty)) of
-          OK (tm, _) -> return $ toValue ctxt [] tm
-          Error err -> fail $ "Can't type check Nothing: " ++ show err
-
-    -- Override toEditor
-    ev ntimes stk top env (App _ (App _ (App _ (P _ n _) ty@(P _ tyN _)) _) arg)
-       | n == editN "toEditor" && tyN == reflm "TT" && not (simpl || unfold) =
-       do argValue <- ev ntimes stk top env arg
-          case elaborate (constraintNS toplevel) ctxt emptyContext 0
-                  (sMN 0 "evalElab") Erased initEState
-                  (reifyTT (quoteTerm argValue)) of
-            Error err -> fail $ show err -- TODO fix
-            OK (v, _) -> do
-              let pterm = delabSugared idrisInit v
-              let s = showTmOpts' defaultPPOption pterm
-              case check ctxt [] (reflectSExp (StringAtom s)) of
-                Error err -> fail $ show err
-                OK (tm, _) -> return $ toValue ctxt [] tm
-
     ev ntimes stk top env (App _ f a)
            = do f' <- ev ntimes stk False env f
                 a' <- ev ntimes stk False env a
@@ -459,38 +407,94 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
          = do a' <- sc a
               app <- apply ntimes stk top env a' as
               wknV 1 app
-    apply ntimes_in stk top env f@(VP Ref n ty) args
-         = do let limit = if simpl then 100 else 10000
-              (u, ntimes) <- usable spec unfold limit n ntimes_in
-              let red = u && (tcReducible n ctxt || spec || (atRepl && noFree env)
-                                || unfold || runtime
-                                || sUN "assert_total" `elem` stk)
-              if red then
-                 do let val = lookupDefAccExact n (spec || unfold || (atRepl && noFree env) || runtime) ctxt
-                    case val of
-                      Just (CaseOp ci _ _ _ _ cd, acc)
-                           | acc == Public || acc == Hidden ->
-                           -- unoptimised version
-                       let (ns, tree) = getCases cd in
-                         if blockSimplify ci n stk
-                           then return $ unload env (VP Ref n ty) args
-                           else -- traceWhen runtime (show (n, ns, tree)) $
-                                do c <- evCase ntimes n (n:stk) top env ns args tree
-                                   case c of
-                                      (Nothing, _) -> return $ unload env (VP Ref n ty) args
-                                      (Just v, rest) -> evApply ntimes stk top env rest v
-                      Just (Operator _ i op, _)  ->
-                        if (i <= length args)
-                           then case op (take i args) of
-                              Nothing -> return $ unload env (VP Ref n ty) args
-                              Just v  -> evApply ntimes stk top env (drop i args) v
-                           else return $ unload env (VP Ref n ty) args
-                      _ -> case args of
-                              [] -> return f
-                              _ -> return $ unload env f args
-                 else case args of
-                           (a : as) -> return $ unload env f (a:as)
-                           [] -> return f
+    apply ntimes_in stk top env f@(VP Ref n ty) args = do
+      let limit = if simpl then 100 else 10000
+      (u, ntimes) <- usable spec unfold limit n ntimes_in
+      let red = u && (tcReducible n ctxt || spec || (atRepl && noFree env)
+                        || unfold || runtime
+                        || sUN "assert_total" `elem` stk)
+      if red then do
+        let val = lookupDefAccExact n (spec || unfold || (atRepl && noFree env) || runtime) ctxt
+        case val of
+          Just (CaseOp ci _ _ _ _ cd, acc)
+                | acc == Public || acc == Hidden ->
+                -- unoptimised version
+            let (ns, tree) = getCases cd in
+            if blockSimplify ci n stk
+              then return $ unload env (VP Ref n ty) args
+              else -- traceWhen runtime (show (n, ns, tree)) $
+                do c <- evCase ntimes n (n:stk) top env ns args tree
+                   case c of
+                     (Nothing, _) -> return $ unload env (VP Ref n ty) args
+                     (Just v, rest) -> evApply ntimes stk top env rest v
+          Just (Operator _ i op, _)
+            | n == sUN "prim__fromEditorTT" && length args >= 1 ->
+              let (arg:rest) = args in
+              let ty = P (TCon 291 0) (reflm "TT") Erased in
+              handle ty arg $ \s -> do
+                case parseExpr idrisInit s of
+                  Left err -> fail $ "parser error" -- TODO fix / return Nothing
+                  -- 1) Parse the surface syntax
+                  Right pterm -> do
+                    case elaborate (constraintNS toplevel) ctxt emptyContext
+                                0 (sMN 0 "toRaw") Erased initEState
+                                (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
+                      Error err -> fail $ "elaboration failed:" ++ show err
+                      -- 2) Elaborate that into the core language
+                      OK (result, _) -> do
+                        let tm = resultTerm result
+                        -- 3) Reflect that to Raw in the core language and add Just
+                        let reflected = reflectMaybe (Just (reflect tm)) (forget ty)
+                        -- 4) Typecheck the reflected term from Raw to TT
+                        case check ctxt [] reflected of
+                          Error err -> nothingOfTy ty
+                          -- 5) Return the TT as a value
+                          OK (tmReflected, _) ->
+                            return (toValue ctxt [] tmReflected) -- TODO rest
+
+            | n == sUN "prim__toEditorTT" && length args >= 1 ->
+              let (arg:rest) = args in
+              case elaborate (constraintNS toplevel) ctxt emptyContext 0
+                      (sMN 0 "evalElab") Erased initEState
+                      (reifyTT (quoteTerm arg)) of
+                Error err -> fail $ show err -- TODO fix
+                OK (v, _) -> do
+                  let pterm = delabSugared idrisInit v
+                  let s = showTmOpts' defaultPPOption pterm
+                  case check ctxt [] (reflectSExp (StringAtom s)) of
+                    Error err -> fail $ show err
+                    OK (tm, _) -> return $ toValue ctxt [] tm -- TODO rest
+
+          Just (Operator _ i op, _)  ->
+              if (i <= length args)
+                  then
+                    case op (take i args) of
+                      Nothing -> return $ unload env (VP Ref n ty) args
+                      Just v  -> evApply ntimes stk top env (drop i args) v
+                  else do return $ unload env (VP Ref n ty) args
+          _ -> case args of
+                 [] -> return f
+                 _ -> return $ unload env f args
+      else case args of
+             (a : as) -> return $ unload env f (a:as)
+             [] -> return f
+
+      where
+        handle :: Type -> Value -> (String -> ElabD Value) -> Eval Value
+        handle ty argValue f = do
+          case elaborate (constraintNS toplevel) ctxt emptyContext 0
+                  (sMN 0 "evalElab") Erased initEState
+                  (reifySExp (quoteTerm argValue) >>= \case
+                      StringAtom s -> f s
+                      _ -> nothingOfTy ty) of
+            Error err -> fail $ show err -- TODO fix
+            OK (v, _) -> return v
+
+        nothingOfTy :: Monad m => Type -> m Value
+        nothingOfTy ty = case check ctxt [] (reflectMaybe Nothing (forget ty)) of
+          OK (tm, _) -> return $ toValue ctxt [] tm
+          Error err -> fail $ "Can't type check Nothing: " ++ show err
+
     apply ntimes stk top env f (a:as) = return $ unload env f (a:as)
     apply ntimes stk top env f []     = return f
 

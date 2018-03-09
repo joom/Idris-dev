@@ -32,6 +32,7 @@ import Idris.Error
 import Idris.Options
 import Idris.Output (sendHighlighting)
 import Idris.Primitives
+import Idris.Reflection
 import Idris.Termination
 import IRTS.Lang
 
@@ -79,64 +80,100 @@ elabPrims = do i <- getIState
                elabBelieveMe
                -- Finally, syntactic equality
                elabSynEq
-    where elabPrim :: Prim -> Idris ()
-          elabPrim (Prim n ty i def sc tot)
-              = do updateContext (addOperator n ty i (valuePrim def))
-                   setTotality n tot
-                   i <- getIState
-                   putIState i { idris_scprims = (n, sc) : idris_scprims i }
+               elabEditorPrims
+  where
+    elabPrim :: Prim -> Idris ()
+    elabPrim (Prim n ty i def sc tot)
+         = do updateContext (addOperator n ty i (valuePrim def))
+              setTotality n tot
+              i <- getIState
+              putIState i { idris_scprims = (n, sc) : idris_scprims i }
 
-          primfc = fileFC "primitive"
+    primfc = fileFC "primitive"
 
-          valuePrim :: ([Const] -> Maybe Const) -> [Value] -> Maybe Value
-          valuePrim prim vals = fmap VConstant (mapM getConst vals >>= prim)
+    valuePrim :: ([Const] -> Maybe Const) -> [Value] -> Maybe Value
+    valuePrim prim vals = fmap VConstant (mapM getConst vals >>= prim)
 
-          getConst (VConstant c) = Just c
-          getConst _             = Nothing
+    getConst (VConstant c) = Just c
+    getConst _             = Nothing
 
 
-          p_believeMe [_,_,x] = Just x
-          p_believeMe _ = Nothing
-          believeTy = Bind (sUN "a") (Pi RigW Nothing (TType (UVar [] (-2))) (TType (UVar [] (-1))))
-                       (Bind (sUN "b") (Pi RigW Nothing (TType (UVar [] (-2))) (TType (UVar [] (-1))))
-                         (Bind (sUN "x") (Pi RigW Nothing (V 1) (TType (UVar [] (-1)))) (V 1)))
-          elabBelieveMe
-             = do let prim__believe_me = sUN "prim__believe_me"
-                  updateContext (addOperator prim__believe_me believeTy 3 p_believeMe)
-                  -- The point is that it is believed to be total, even
-                  -- though it clearly isn't :)
-                  setTotality prim__believe_me (Total [])
-                  i <- getIState
-                  putIState i {
-                      idris_scprims = (prim__believe_me, (3, LNoOp)) : idris_scprims i
-                    }
+    p_believeMe [_,_,x] = Just x
+    p_believeMe _ = Nothing
+    believeTy = Bind (sUN "a") (Pi RigW Nothing (TType (UVar [] (-2))) (TType (UVar [] (-1))))
+                  (Bind (sUN "b") (Pi RigW Nothing (TType (UVar [] (-2))) (TType (UVar [] (-1))))
+                    (Bind (sUN "x") (Pi RigW Nothing (V 1) (TType (UVar [] (-1)))) (V 1)))
+    elabBelieveMe
+       = do let prim__believe_me = sUN "prim__believe_me"
+            updateContext (addOperator prim__believe_me believeTy 3 p_believeMe)
+            -- The point is that it is believed to be total, even
+            -- though it clearly isn't :)
+            setTotality prim__believe_me (Total [])
+            i <- getIState
+            putIState i {
+                idris_scprims = (prim__believe_me, (3, LNoOp)) : idris_scprims i
+              }
 
-          p_synEq [t,_,x,y]
-               | x == y = Just (VApp (VApp vnJust VErased)
-                                (VApp (VApp vnRefl t) x))
-               | otherwise = Just (VApp vnNothing VErased)
-          p_synEq args = Nothing
+    p_synEq [t,_,x,y]
+          | x == y = Just (VApp (VApp vnJust VErased)
+                          (VApp (VApp vnRefl t) x))
+          | otherwise = Just (VApp vnNothing VErased)
+    p_synEq args = Nothing
 
-          nMaybe = P (TCon 0 2) (sNS (sUN "Maybe") ["Maybe", "Prelude"]) Erased
-          vnJust = VP (DCon 1 2 False) (sNS (sUN "Just") ["Maybe", "Prelude"]) VErased
-          vnNothing = VP (DCon 0 1 False) (sNS (sUN "Nothing") ["Maybe", "Prelude"]) VErased
-          vnRefl = VP (DCon 0 2 False) eqCon VErased
+    nMaybe = P (TCon 0 2) (sNS (sUN "Maybe") ["Maybe", "Prelude"]) Erased
+    vnJust = VP (DCon 1 2 False) (sNS (sUN "Just") ["Maybe", "Prelude"]) VErased
+    vnNothing = VP (DCon 0 1 False) (sNS (sUN "Nothing") ["Maybe", "Prelude"]) VErased
+    vnRefl = VP (DCon 0 2 False) eqCon VErased
 
-          synEqTy = Bind (sUN "a") (Pi RigW Nothing (TType (UVar [] (-3))) (TType (UVar [] (-2))))
-                     (Bind (sUN "b") (Pi RigW Nothing (TType (UVar [] (-3))) (TType (UVar [] (-2))))
-                      (Bind (sUN "x") (Pi RigW Nothing (V 1) (TType (UVar [] (-2))))
-                       (Bind (sUN "y") (Pi RigW Nothing (V 1) (TType (UVar [] (-2))))
-                         (mkApp nMaybe [mkApp (P (TCon 0 4) eqTy Erased)
-                                               [V 3, V 2, V 1, V 0]]))))
-          elabSynEq
-             = do let synEq = sUN "prim__syntactic_eq"
+    synEqTy = Bind (sUN "a") (Pi RigW Nothing (TType (UVar [] (-3))) (TType (UVar [] (-2))))
+                (Bind (sUN "b") (Pi RigW Nothing (TType (UVar [] (-3))) (TType (UVar [] (-2))))
+                (Bind (sUN "x") (Pi RigW Nothing (V 1) (TType (UVar [] (-2))))
+                  (Bind (sUN "y") (Pi RigW Nothing (V 1) (TType (UVar [] (-2))))
+                    (mkApp nMaybe [mkApp (P (TCon 0 4) eqTy Erased)
+                                          [V 3, V 2, V 1, V 0]]))))
+    elabSynEq
+       = do let synEq = sUN "prim__syntactic_eq"
+            updateContext (addOperator synEq synEqTy 4 p_synEq)
+            setTotality synEq (Total [])
+            i <- getIState
+            putIState i {
+                idris_scprims = (synEq, (4, LNoOp)) : idris_scprims i
+              }
 
-                  updateContext (addOperator synEq synEqTy 4 p_synEq)
-                  setTotality synEq (Total [])
-                  i <- getIState
-                  putIState i {
-                     idris_scprims = (synEq, (4, LNoOp)) : idris_scprims i
-                    }
+    nSExp = P (TCon 8 0) (editN "SExp") Erased
+    nTT = P (TCon 291 0) (reflm "TT") Erased
+    nTyDecl = P (TCon 21 0) (tacN "TyDecl") Erased
+    nDataDefn = P (TCon 42 0) (tacN "DataDefn") Erased
+    nFunDefnTT = App Complete (P (TCon 29 1) (tacN "FunDefn") Erased) nTT
+    nFunClauseTT = App Complete (P (TCon 28 1) (tacN "FunClause") Erased) nTT
+
+    fromEditorTy :: Type -> Type
+    fromEditorTy ty =
+      Bind (sUN "x") (Pi RigW Nothing nSExp (TType (UVar [] (-2)))) (mkApp nMaybe [ty])
+    toEditorTy :: Type -> Type
+    toEditorTy ty =
+      Bind (sUN "x") (Pi RigW Nothing ty (TType (UVar [] (-2)))) nSExp
+
+    p [_] = Just (VApp vnNothing VErased)
+    p _ = Nothing
+
+    -- Add all to context
+    nameAndTy = [ ("TT", nTT) , ("TyDecl", nTyDecl)
+                , ("DataDefn", nDataDefn) , ("FunDefnTT", nFunDefnTT)
+                , ("FunClauseTT", nFunClauseTT) ]
+
+    elabEditorPrims :: Idris ()
+    elabEditorPrims
+       = forM_ nameAndTy $ \(s, ty) -> do
+           let from = sUN ("prim__fromEditor" ++ s)
+           let to = sUN ("prim__toEditor" ++ s)
+           updateContext (addOperator from (fromEditorTy ty) 1 p)
+           setTotality from (Total [])
+           updateContext (addOperator to (toEditorTy ty) 1 p)
+           setTotality to (Total [])
+           i <- getIState
+           putIState i {
+             idris_scprims = (from, (4, LNoOp)) : (to, (4, LNoOp)) : idris_scprims i }
 
 
 elabDecls :: ElabInfo -> [PDecl] -> Idris ()

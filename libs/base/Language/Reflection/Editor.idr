@@ -42,32 +42,42 @@ interface Editorable a where
 -- These primitives should never appear when we are normalizing terms
 -- when we run tactics in the editor or when we use Editorable in the REPL.
 -- However, they will appear when we run the compiled program
-postulate private prim__fromEditor : SExp -> Maybe a
-postulate private prim__toEditor : a -> SExp
-
-implementation Editorable TTName where
-  fromEditor x = prim__fromEditor x
-  toEditor   x = prim__toEditor x
-
 implementation Editorable TT where
-  fromEditor x = prim__fromEditor x
-  toEditor   x = prim__toEditor x
+  fromEditor x = prim__fromEditorTT x
+  toEditor   x = prim__toEditorTT x
 
 implementation Editorable TyDecl where
-  fromEditor x = prim__fromEditor x
-  toEditor   x = prim__toEditor x
+  fromEditor x = prim__fromEditorTyDecl x
+  toEditor   x = prim__toEditorTyDecl x
 
 implementation Editorable DataDefn where
-  fromEditor x = prim__fromEditor x
-  toEditor   x = prim__toEditor x
+  fromEditor x = prim__fromEditorDataDefn x
+  toEditor   x = prim__toEditorDataDefn x
 
-implementation Editorable a => Editorable (FunDefn a) where
-  fromEditor x = prim__fromEditor x
-  toEditor   x = prim__toEditor x
+implementation Editorable (FunDefn TT) where
+  fromEditor x = prim__fromEditorFunDefnTT x
+  toEditor   x = prim__toEditorFunDefnTT x
 
-implementation Editorable a => Editorable (FunClause a) where
-  fromEditor x = prim__fromEditor x
-  toEditor   x = prim__toEditor x
+implementation Editorable (FunClause TT) where
+  fromEditor x = prim__fromEditorFunClauseTT x
+  toEditor   x = prim__toEditorFunClauseTT x
+
+implementation Editorable TTName where
+  fromEditor (StringAtom s) = namify s
+    where namify s = case reverse (map pack (splitOn '.' (unpack s))) of
+                        [] => Nothing
+                        [x] => Just (UN x)
+                        (x :: xs) => Just (NS (UN x) xs)
+  fromEditor _ = Nothing
+
+  toEditor n = StringAtom (stringify n)
+    where
+      stringify (UN x) = x
+      stringify (NS x []) = stringify x
+      stringify (NS x xs) =
+        concat (intersperse "." (reverse ("" :: xs))) ++ stringify x
+      stringify (MN i x) = "__" ++ x ++ show i
+      stringify (SN sn) = "" -- TODO fix
 
 implementation Editorable Unit where
   fromEditor (SExpList []) = Just ()
