@@ -85,8 +85,8 @@ elabEditAt fn nameStr l args =
          let tm' = normalise ctxt [] tm
          (tm'', _) <- tclift $ elaborate "(toplevel)" ctxt
             (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
-            Erased initEState (reifyMaybe tm' >>=
-              \case Just x -> return x ; _ -> fail "Nothing")
+            Erased initEState (reifyEither tm' >>=
+              \case Right x -> return x ; Left _ -> fail "Left")
          return $ forget tm''
      -- 5) build up a Term which is a function application
      --    of the original tactic and all the functions

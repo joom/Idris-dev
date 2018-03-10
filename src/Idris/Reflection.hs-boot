@@ -10,10 +10,13 @@ import Idris.SExp
 editN :: String -> Name
 editNS :: Name -> Name
 reflm :: String -> Name
+reflErrName :: String -> Name
 
 reifySExp :: Term -> ElabD SExp
 reifyTT :: Term -> ElabD Term
 
 reflect :: Term -> Raw
 reflectMaybe :: Maybe Raw -> Raw -> Raw
+reflectEither :: Either Raw Raw -> Raw -> Raw -> Raw
 reflectSExp :: SExp -> Raw
+reflectErr :: Err -> Raw

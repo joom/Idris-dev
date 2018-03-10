@@ -38,7 +38,7 @@ bugaddr = "https://github.com/idris-lang/Idris-dev/issues"
 
 -- | Re-add syntactic sugar in a term
 resugar :: IState -> PTerm -> PTerm
-resugar ist = transform flattenDoLet . transform resugarApp
+resugar ist = transform dedelay . transform flattenDoLet . transform resugarApp
   where
     resugarApp (PApp fc (PRef _ _ n) args)
       | [c, t, f] <- mapMaybe explicitTerm args
@@ -69,8 +69,14 @@ resugar ist = transform flattenDoLet . transform resugarApp
               fixExp d = [d]
     flattenDoLet tm = tm
 
-    dedelay (PApp _ (PRef _ _ delay) [_, _, obj])
-      | delay == sUN "Delay" = getTm obj
+    dedelay (PApp _ (PRef _ _ delay)
+                    [PExp _ _ _ (PRef _ _ reason), _, obj])
+      | delay == sUN "Delay" && reason == sUN "LazyValue"
+      = getTm obj
+    dedelay (PApp _ (PRef _ _ delay)
+                    [PImp _ _ _ _ (PRef _ _ reason), _, obj])
+      | delay == sUN "Delay" && reason == sUN "LazyValue"
+      = getTm obj
     dedelay x = x
 
     explicitTerm (PExp {getTm = tm}) = Just tm

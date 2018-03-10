@@ -22,7 +22,7 @@ import Idris.Elab.Utils
 import Idris.Elab.Value
 import Idris.Error
 import Idris.Options
-import Idris.Output (sendHighlighting)
+import Idris.Output
 
 import Prelude hiding (id, (.))
 
@@ -204,6 +204,10 @@ elabType' norm info syn doc argDocs fc opts n nfc ty' = {- let ty' = piBind (par
                          addIBC (IBCErrorHandler n)
                  else ifail $ "The type " ++ show nty' ++ " is invalid for an error handler"
              else ifail "Error handlers can only be defined when the ErrorReflection language extension is enabled."
+         -- If the function is declared as an editor action, then check if all
+         -- components of the type are Editorable
+         when (EditorAction `elem` opts) $ do
+           iputStrLn $ "Check for Editorable in type: " ++ show nty'
          -- Send highlighting information about the name being declared
          sendHighlighting [(nfc, AnnName n Nothing Nothing Nothing)]
          -- if it's an export list type, make a note of it

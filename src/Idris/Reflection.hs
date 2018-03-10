@@ -20,7 +20,8 @@ module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          reifyFunDefn, reifyList, reifyRDataDefn, reifyRaw,
                          reifyReportPart, reifyReportParts, reifyTT, reifyTTName,
                          reifyTyDecl, rFunArgToPArg, tacN,
-                         editN, editNS, reflectSExp, reifySExp, reflectMaybe, reifyMaybe
+                         editN, editNS, reflectSExp, reifySExp, reflectMaybe,
+                         reflectEither, reifyMaybe, reifyEither, reflErrName
                          ) where
 
 import Idris.Core.Elaborate (claim, fill, focus, getNameFrom, initElaborator,
@@ -1252,12 +1253,24 @@ reflectMaybe :: Maybe Raw -> Raw -> Raw
 reflectMaybe (Just x) ty = RApp (RApp (Var $ sNS (sUN "Just") ["Maybe", "Prelude"]) ty) x
 reflectMaybe Nothing ty = RApp (Var $ sNS (sUN "Nothing") ["Maybe", "Prelude"]) ty
 
+reflectEither :: Either Raw Raw -> Raw -> Raw -> Raw
+reflectEither (Right x) ty1 ty2 =
+  raw_apply (Var $ sNS (sUN "Right") ["Either", "Prelude"]) [ty2, ty1, x]
+reflectEither (Left x) ty1 ty2 =
+  raw_apply (Var $ sNS (sUN "Left") ["Either", "Prelude"]) [ty2, ty1, x]
+
 reifyMaybe :: Term -> ElabD (Maybe Term)
 reifyMaybe (App _ (P _ n _) ty)
   | n == sNS (sUN "Nothing") ["Maybe", "Prelude"] = return Nothing
 reifyMaybe (App _ (App _ (P _ n _) ty) x)
   | n == sNS (sUN "Just") ["Maybe", "Prelude"] = return (Just x)
 reifyMaybe _ = fail "Not Just or Nothing"
+
+reifyEither :: Term -> ElabD (Either Term Term)
+reifyEither (App _ (App _ (App _ (P _ n _) _) _) x)
+  | n == sNS (sUN "Left") ["Either", "Prelude"] = return (Left x)
+  | n == sNS (sUN "Right") ["Either", "Prelude"] = return (Right x)
+reifyEither _ = fail "Not Left or Right"
 
 reflectSExp :: SExp -> Raw
 reflectSExp (StringAtom s)  = RApp (Var $ editN "StringAtom")  $ RConstant (Str s)

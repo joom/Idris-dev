@@ -147,14 +147,16 @@ elabPrims = do i <- getIState
     nFunDefnTT = App Complete (P (TCon 29 1) (tacN "FunDefn") Erased) nTT
     nFunClauseTT = App Complete (P (TCon 28 1) (tacN "FunClause") Erased) nTT
 
+    nErr = P (TCon 8 0) (reflErrName "Err") Erased
+    nEither = P (TCon 8 2) (sNS (sUN "Either") ["Either", "Prelude"]) Erased
+
     fromEditorTy :: Type -> Type
     fromEditorTy ty =
-      Bind (sUN "x") (Pi RigW Nothing nSExp (TType (UVar [] (-2)))) (mkApp nMaybe [ty])
+      Bind (sUN "x") (Pi RigW Nothing nSExp (TType (UVar [] (-2)))) (mkApp nEither [nErr, ty])
     toEditorTy :: Type -> Type
     toEditorTy ty =
       Bind (sUN "x") (Pi RigW Nothing ty (TType (UVar [] (-2)))) nSExp
 
-    p [_] = Just (VApp vnNothing VErased)
     p _ = Nothing
 
     -- Add all to context

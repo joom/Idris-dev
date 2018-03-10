@@ -427,43 +427,52 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
                    case c of
                      (Nothing, _) -> return $ unload env (VP Ref n ty) args
                      (Just v, rest) -> evApply ntimes stk top env rest v
+
           Just (Operator _ i op, _)
-            | n == sUN "prim__fromEditorTT" && length args >= 1 ->
-              let (arg:rest) = args in
+            -- Override fromEditor for TT
+            | n == sUN "prim__fromEditorTT" && length args == 1 ->
+              let (arg:[]) = args in
               let ty = P (TCon 291 0) (reflm "TT") Erased in
               handle ty arg $ \s -> do
                 case parseExpr idrisInit s of
-                  Left err -> fail $ "parser error" -- TODO fix / return Nothing
+                  Left err -> fail "Parser error" -- TODO say something about why
                   -- 1) Parse the surface syntax
                   Right pterm -> do
                     case elaborate (constraintNS toplevel) ctxt emptyContext
                                 0 (sMN 0 "toRaw") Erased initEState
                                 (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
-                      Error err -> fail $ "elaboration failed:" ++ show err
+                      Error err -> do
+                        let raw = raw_apply (Var (sNS (sUN "Left") ["Either", "Prelude"]))
+                                  [forget ty, Var (reflErrName "Err"), reflectErr err]
+                        case check ctxt [] raw of
+                          OK (x, _) -> return (toValue ctxt [] x)
+                          Error err -> fail "Shouldn't happen"
                       -- 2) Elaborate that into the core language
                       OK (result, _) -> do
                         let tm = resultTerm result
                         -- 3) Reflect that to Raw in the core language and add Just
-                        let reflected = reflectMaybe (Just (reflect tm)) (forget ty)
+                        let errTy = Var (reflErrName "Err")
+                        let reflected = reflectEither (Right (reflect tm)) errTy (forget ty)
                         -- 4) Typecheck the reflected term from Raw to TT
                         case check ctxt [] reflected of
                           Error err -> nothingOfTy ty
                           -- 5) Return the TT as a value
                           OK (tmReflected, _) ->
-                            return (toValue ctxt [] tmReflected) -- TODO rest
+                            return (toValue ctxt [] tmReflected)
 
-            | n == sUN "prim__toEditorTT" && length args >= 1 ->
-              let (arg:rest) = args in
+            -- Override toEditor for TT
+            | n == sUN "prim__toEditorTT" && length args == 1 ->
+              let (arg:[]) = args in
               case elaborate (constraintNS toplevel) ctxt emptyContext 0
                       (sMN 0 "evalElab") Erased initEState
                       (reifyTT (quoteTerm arg)) of
                 Error err -> fail $ show err -- TODO fix
                 OK (v, _) -> do
                   let pterm = delabSugared idrisInit v
-                  let s = showTmOpts' defaultPPOption pterm
+                  let s = showTmOpts defaultPPOption pterm
                   case check ctxt [] (reflectSExp (StringAtom s)) of
                     Error err -> fail $ show err
-                    OK (tm, _) -> return $ toValue ctxt [] tm -- TODO rest
+                    OK (tm, _) -> return $ toValue ctxt [] tm
 
           Just (Operator _ i op, _)  ->
               if (i <= length args)
@@ -493,7 +502,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
         nothingOfTy :: Monad m => Type -> m Value
         nothingOfTy ty = case check ctxt [] (reflectMaybe Nothing (forget ty)) of
           OK (tm, _) -> return $ toValue ctxt [] tm
-          Error err -> fail $ "Can't type check Nothing: " ++ show err
+          Error err -> fail $ "Can't type check: " ++ show err
 
     apply ntimes stk top env f (a:as) = return $ unload env f (a:as)
     apply ntimes stk top env f []     = return f

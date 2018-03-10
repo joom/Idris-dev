@@ -26,4 +26,5 @@ data PPOption
 
 defaultPPOption :: PPOption
 
+showTmOpts :: PPOption -> PTerm -> String
 showTmOpts' :: PPOption -> PTerm -> String
