@@ -17,6 +17,7 @@ import Idris.Core.Elaborate hiding (Tactic(..))
 import Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Docstrings (Docstring)
+import Idris.Elab.Edit
 import Idris.Elab.Term
 import Idris.Elab.Utils
 import Idris.Elab.Value
@@ -207,7 +208,14 @@ elabType' norm info syn doc argDocs fc opts n nfc ty' = {- let ty' = piBind (par
          -- If the function is declared as an editor action, then check if all
          -- components of the type are Editorable
          when (EditorAction `elem` opts) $ do
-           iputStrLn $ "Check for Editorable in type: " ++ show nty'
+           iputStrLn $ "Check for Editorable for the type of " ++ show (basename n)
+           collected <- collectTypes nty'
+           lastTyInElab <- tyInElab (last collected)
+           let toCheck = init collected ++ [lastTyInElab]
+           forM_ toCheck $ \ty -> do
+             -- find Editorable instance for ty
+             iputStrLn $ "Checking if " ++ show ty ++ " is Editorable"
+
          -- Send highlighting information about the name being declared
          sendHighlighting [(nfc, AnnName n Nothing Nothing Nothing)]
          -- if it's an export list type, make a note of it

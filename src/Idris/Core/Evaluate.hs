@@ -42,6 +42,7 @@ import {-# SOURCE #-} Idris.Elab.Term
 import {-# SOURCE #-} Idris.Core.Elaborate
 import {-# SOURCE #-} Idris.Core.Typecheck
 import {-# SOURCE #-} Idris.Parser
+import Idris.Parser.Stack (prettyError)
 import {-# SOURCE #-} Idris.Reflection
 import Idris.SExp
 
@@ -431,42 +432,34 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
           Just (Operator _ i op, _)
             -- Override fromEditor for TT
             | n == sUN "prim__fromEditorTT" && length args == 1 ->
-              let (arg:[]) = args in
-              let ty = P (TCon 291 0) (reflm "TT") Erased in
-              handle ty arg $ \s -> do
+              handle ttTy (head args) $ \s -> do
                 case parseExpr idrisInit s of
-                  Left err -> fail "Parser error" -- TODO say something about why
+                  Left err -> leftOfTy (Msg $ prettyError err) ttTy
                   -- 1) Parse the surface syntax
                   Right pterm -> do
                     case elaborate (constraintNS toplevel) ctxt emptyContext
                                 0 (sMN 0 "toRaw") Erased initEState
                                 (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
                       Error err -> do
-                        let raw = raw_apply (Var (sNS (sUN "Left") ["Either", "Prelude"]))
-                                  [forget ty, Var (reflErrName "Err"), reflectErr err]
-                        case check ctxt [] raw of
-                          OK (x, _) -> return (toValue ctxt [] x)
-                          Error err -> fail "Shouldn't happen"
+                        leftOfTy err ttTy
                       -- 2) Elaborate that into the core language
                       OK (result, _) -> do
                         let tm = resultTerm result
                         -- 3) Reflect that to Raw in the core language and add Just
-                        let errTy = Var (reflErrName "Err")
-                        let reflected = reflectEither (Right (reflect tm)) errTy (forget ty)
+                        let reflected = reflectEither (Right (reflect tm)) errTy (forget ttTy)
                         -- 4) Typecheck the reflected term from Raw to TT
                         case check ctxt [] reflected of
-                          Error err -> nothingOfTy ty
+                          Error err -> leftOfTy err ttTy
                           -- 5) Return the TT as a value
                           OK (tmReflected, _) ->
                             return (toValue ctxt [] tmReflected)
 
             -- Override toEditor for TT
             | n == sUN "prim__toEditorTT" && length args == 1 ->
-              let (arg:[]) = args in
               case elaborate (constraintNS toplevel) ctxt emptyContext 0
                       (sMN 0 "evalElab") Erased initEState
-                      (reifyTT (quoteTerm arg)) of
-                Error err -> fail $ show err -- TODO fix
+                      (reifyTT (quoteTerm (head args))) of
+                Error err -> leftOfTy err ttTy
                 OK (v, _) -> do
                   let pterm = delabSugared idrisInit v
                   let s = showTmOpts defaultPPOption pterm
@@ -489,20 +482,25 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
              [] -> return f
 
       where
+        errTy = Var (reflErrName "Err")
+        ttTy = P (TCon 291 0) (reflm "TT") Erased
+
         handle :: Type -> Value -> (String -> ElabD Value) -> Eval Value
         handle ty argValue f = do
           case elaborate (constraintNS toplevel) ctxt emptyContext 0
                   (sMN 0 "evalElab") Erased initEState
                   (reifySExp (quoteTerm argValue) >>= \case
                       StringAtom s -> f s
-                      _ -> nothingOfTy ty) of
-            Error err -> fail $ show err -- TODO fix
+                      _ -> leftOfTy (Msg "Not a StringAtom") ty) of
+            Error err -> leftOfTy err ty
             OK (v, _) -> return v
 
-        nothingOfTy :: Monad m => Type -> m Value
-        nothingOfTy ty = case check ctxt [] (reflectMaybe Nothing (forget ty)) of
-          OK (tm, _) -> return $ toValue ctxt [] tm
-          Error err -> fail $ "Can't type check: " ++ show err
+        leftOfTy :: Monad m => Err -> Type -> m Value
+        leftOfTy err ty =
+          case check ctxt [] (reflectEither (Left (reflectErr err))
+                                            errTy (forget ty)) of
+            OK (tm, _) -> return $ toValue ctxt [] tm
+            Error err -> fail $ "Shouldn't happen: " ++ show err
 
     apply ntimes stk top env f (a:as) = return $ unload env f (a:as)
     apply ntimes stk top env f []     = return f
