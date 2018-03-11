@@ -29,7 +29,6 @@ import Idris.Options
 import Idris.ProofSearch
 import Idris.Reflection
 import Idris.Termination (buildSCG, checkDeclTotality, checkPositive)
-
 import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.State.Strict

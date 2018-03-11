@@ -27,7 +27,7 @@ implementation Show SExp where
   show (IntegerAtom i) = show i
   show (SymbolAtom s) = ":" ++ s
   show (SExpList l) = "(" ++ mid ++ ")"
-    where mid = foldr (++) "" (intersperse " " (map show l))
+    where mid = assert_total $ foldr (++) "" (intersperse " " (map show l))
 
 implementation Eq SExp where
   (StringAtom x) == (StringAtom y) = x == y

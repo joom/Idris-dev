@@ -16,6 +16,7 @@ import Idris.ASTUtils
 import Idris.Core.Elaborate hiding (Tactic(..))
 import Idris.Core.Evaluate
 import Idris.Core.TT
+import Idris.Delaborate
 import Idris.Docstrings (Docstring)
 import Idris.Elab.Edit
 import Idris.Elab.Term
@@ -24,6 +25,7 @@ import Idris.Elab.Value
 import Idris.Error
 import Idris.Options
 import Idris.Output
+import Idris.Reflection
 
 import Prelude hiding (id, (.))
 
@@ -208,13 +210,27 @@ elabType' norm info syn doc argDocs fc opts n nfc ty' = {- let ty' = piBind (par
          -- If the function is declared as an editor action, then check if all
          -- components of the type are Editorable
          when (EditorAction `elem` opts) $ do
-           iputStrLn $ "Check for Editorable for the type of " ++ show (basename n)
            collected <- collectTypes nty'
            lastTyInElab <- tyInElab (last collected)
            let toCheck = init collected ++ [lastTyInElab]
            forM_ toCheck $ \ty -> do
              -- find Editorable instance for ty
-             iputStrLn $ "Checking if " ++ show ty ++ " is Editorable"
+             i <- getIState
+             let tyP = delab i ty
+             let pterm = PApp NoFC (PRef NoFC [] (editN "fromEditor"))
+                              [PImp 1 True [] (sUN "a") tyP]
+             case elaborate (constraintNS info) ctxt
+                    (idris_datatypes i) (idris_name i) (sMN 0 "val")
+                    infP initEState (build i info ERHS [Reflection]
+                    (sMN 0 "val") (infTerm (addImpl [] i pterm))) of
+               OK _ -> return ()
+               Error err -> do -- assume it's a implementation resolution error
+                 ierror $ At fc $ FancyMsg [
+                    TextPart "You declared", NamePart n
+                  , TextPart "to be an editor action, but there's no"
+                  , NamePart (editN "Editorable")
+                  , TextPart "implementation for", TermPart ty
+                  ]
 
          -- Send highlighting information about the name being declared
          sendHighlighting [(nfc, AnnName n Nothing Nothing Nothing)]
