@@ -17,7 +17,7 @@ module Idris.Parser(IdrisParser(..), ImportInfo(..), moduleName, addReplSyntax, 
                     runparser, ParseError, parseErrorDoc) where
 
 import Idris.AbsSyntax hiding (namespace, params)
-import {-# SOURCE #-} Idris.Core.Evaluate
+import Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Delaborate
 import Idris.Docstrings hiding (Unchecked)

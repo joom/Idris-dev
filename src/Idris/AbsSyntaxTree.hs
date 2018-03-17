@@ -14,7 +14,7 @@ Maintainer  : The Idris Community.
 module Idris.AbsSyntaxTree where
 
 import Idris.Core.Elaborate hiding (Tactic(..))
-import {-# SOURCE #-} Idris.Core.Evaluate
+import Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Docstrings
 import Idris.Options

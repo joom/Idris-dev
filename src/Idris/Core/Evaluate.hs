@@ -33,18 +33,8 @@ module Idris.Core.Evaluate(normalise, normaliseTrace, normaliseC,
                 visibleDefinitions,
                 isUniverse, linearCheck, linearCheckArg) where
 
-import {-# SOURCE #-} Idris.AbsSyntax
-import {-# SOURCE #-} Idris.AbsSyntaxTree
 import Idris.Core.CaseTree
 import Idris.Core.TT
-import {-# SOURCE #-} Idris.Delaborate
-import {-# SOURCE #-} Idris.Elab.Term
-import {-# SOURCE #-} Idris.Core.Elaborate
-import {-# SOURCE #-} Idris.Core.Typecheck
-import {-# SOURCE #-} Idris.Parser
-import Idris.Parser.Stack (prettyError)
-import {-# SOURCE #-} Idris.Reflection
-import Idris.SExp
 
 import Control.Monad.State
 import Data.List
@@ -168,9 +158,7 @@ simplify ctxt env t
                                            (sUN "assert_total", 0),
                                            (sUN "par", 0),
                                            (sUN "prim__syntactic_eq", 0),
-                                           (sUN "fork", 0)] ++
-                                           map (, 0) fromEditorNames ++
-                                           map (, 0) toEditorNames)
+                                           (sUN "fork", 0)])
                                  (map finalEntry env) (finalise t)
                                  [Simplify True]
                    quote 0 val) initEval
@@ -192,9 +180,7 @@ rt_simplify ctxt env t
                                            (sUN "Force", 0),
                                            (sUN "par", 0),
                                            (sUN "prim__syntactic_eq", 0),
-                                           (sUN "prim_fork", 0)] ++
-                                           map (, 0) fromEditorNames ++
-                                           map (, 0) toEditorNames)
+                                           (sUN "prim_fork", 0)])
                                  (map finalEntry env) (finalise t)
                                  [RunTT]
                    quote 0 val) initEval
@@ -257,10 +243,6 @@ setBlock b = do ES ls num _ <- get
 deduct = fnCount 1
 reinstate = fnCount (-1)
 
-editorablePrimitiveTypes = ["TT", "TyDecl", "DataDefn", "FunDefnTT", "FunClauseTT"]
-fromEditorNames = map (sUN . ("prim__fromEditor" ++)) editorablePrimitiveTypes
-toEditorNames   = map (sUN . ("prim__toEditor" ++)) editorablePrimitiveTypes
-
 -- | Evaluate in a context of locally named things (i.e. not de Bruijn indexed,
 -- such as we might have during construction of a proof)
 
@@ -279,7 +261,6 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
     unfold = Unfold `elem` opts
 
     noFree = all canonical . map snd
-    toBlock = [sUN "prim__syntactic_eq"] ++ fromEditorNames ++ toEditorNames
 
     -- returns 'True' if the function should block
     -- normal evaluation should return false
@@ -289,7 +270,7 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
                        else not (inl || dict) || elem n stk
        | simpl
            = (not inl || elem n stk)
-             || n `elem` toBlock
+             || n `elem` [sUN "prim__syntactic_eq"]
        | otherwise = False
 
     getCases cd | simpl = cases_compiletime cd
@@ -428,45 +409,6 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
                    case c of
                      (Nothing, _) -> return $ unload env (VP Ref n ty) args
                      (Just v, rest) -> evApply ntimes stk top env rest v
-
-          Just (Operator _ i op, _)
-            -- Override fromEditor for TT
-            | n == sUN "prim__fromEditorTT" && length args == 1 ->
-              handle ttTy (head args) $ \s -> do
-                case parseExpr idrisInit s of
-                  Left err -> leftOfTy (Msg $ prettyError err) ttTy
-                  -- 1) Parse the surface syntax
-                  Right pterm -> do
-                    case elaborate (constraintNS toplevel) ctxt emptyContext
-                                0 (sMN 0 "toRaw") Erased initEState
-                                (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
-                      Error err -> do
-                        leftOfTy err ttTy
-                      -- 2) Elaborate that into the core language
-                      OK (result, _) -> do
-                        let tm = resultTerm result
-                        -- 3) Reflect that to Raw in the core language and add Just
-                        let reflected = reflectEither (Right (reflect tm)) errTy (forget ttTy)
-                        -- 4) Typecheck the reflected term from Raw to TT
-                        case check ctxt [] reflected of
-                          Error err -> leftOfTy err ttTy
-                          -- 5) Return the TT as a value
-                          OK (tmReflected, _) ->
-                            return (toValue ctxt [] tmReflected)
-
-            -- Override toEditor for TT
-            | n == sUN "prim__toEditorTT" && length args == 1 ->
-              case elaborate (constraintNS toplevel) ctxt emptyContext 0
-                      (sMN 0 "evalElab") Erased initEState
-                      (reifyTT (quoteTerm (head args))) of
-                Error err -> leftOfTy err ttTy
-                OK (v, _) -> do
-                  let pterm = delabSugared idrisInit v
-                  let s = showTmOpts defaultPPOption pterm
-                  case check ctxt [] (reflectSExp (StringAtom s)) of
-                    Error err -> fail $ show err
-                    OK (tm, _) -> return $ toValue ctxt [] tm
-
           Just (Operator _ i op, _)  ->
               if (i <= length args)
                   then
@@ -480,28 +422,6 @@ eval traceon ctxt ntimes genv tm opts = ev ntimes [] True [] tm where
       else case args of
              (a : as) -> return $ unload env f (a:as)
              [] -> return f
-
-      where
-        errTy = Var (reflErrName "Err")
-        ttTy = P (TCon 291 0) (reflm "TT") Erased
-
-        handle :: Type -> Value -> (String -> ElabD Value) -> Eval Value
-        handle ty argValue f = do
-          case elaborate (constraintNS toplevel) ctxt emptyContext 0
-                  (sMN 0 "evalElab") Erased initEState
-                  (reifySExp (quoteTerm argValue) >>= \case
-                      StringAtom s -> f s
-                      _ -> leftOfTy (Msg "Not a StringAtom") ty) of
-            Error err -> leftOfTy err ty
-            OK (v, _) -> return v
-
-        leftOfTy :: Monad m => Err -> Type -> m Value
-        leftOfTy err ty =
-          case check ctxt [] (reflectEither (Left (reflectErr err))
-                                            errTy (forget ty)) of
-            OK (tm, _) -> return $ toValue ctxt [] tm
-            Error err -> fail $ "Shouldn't happen: " ++ show err
-
     apply ntimes stk top env f (a:as) = return $ unload env f (a:as)
     apply ntimes stk top env f []     = return f
 

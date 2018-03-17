@@ -32,7 +32,6 @@ import Idris.Error
 import Idris.Options
 import Idris.Output (sendHighlighting)
 import Idris.Primitives
-import Idris.Reflection
 import Idris.Termination
 import IRTS.Lang
 
@@ -80,7 +79,6 @@ elabPrims = do i <- getIState
                elabBelieveMe
                -- Finally, syntactic equality
                elabSynEq
-               elabEditorPrims
   where
     elabPrim :: Prim -> Idris ()
     elabPrim (Prim n ty i def sc tot)
@@ -139,44 +137,6 @@ elabPrims = do i <- getIState
             putIState i {
                 idris_scprims = (synEq, (4, LNoOp)) : idris_scprims i
               }
-
-    nSExp = P (TCon 8 0) (editN "SExp") Erased
-    nTT = P (TCon 291 0) (reflm "TT") Erased
-    nTyDecl = P (TCon 21 0) (tacN "TyDecl") Erased
-    nDataDefn = P (TCon 42 0) (tacN "DataDefn") Erased
-    nFunDefnTT = App Complete (P (TCon 29 1) (tacN "FunDefn") Erased) nTT
-    nFunClauseTT = App Complete (P (TCon 28 1) (tacN "FunClause") Erased) nTT
-
-    nErr = P (TCon 8 0) (reflErrName "Err") Erased
-    nEither = P (TCon 8 2) (sNS (sUN "Either") ["Either", "Prelude"]) Erased
-
-    fromEditorTy :: Type -> Type
-    fromEditorTy ty =
-      Bind (sUN "x") (Pi RigW Nothing nSExp (TType (UVar [] (-2)))) (mkApp nEither [nErr, ty])
-    toEditorTy :: Type -> Type
-    toEditorTy ty =
-      Bind (sUN "x") (Pi RigW Nothing ty (TType (UVar [] (-2)))) nSExp
-
-    p _ = Nothing
-
-    -- Add all to context
-    nameAndTy = [ ("TT", nTT) , ("TyDecl", nTyDecl)
-                , ("DataDefn", nDataDefn) , ("FunDefnTT", nFunDefnTT)
-                , ("FunClauseTT", nFunClauseTT) ]
-
-    elabEditorPrims :: Idris ()
-    elabEditorPrims
-       = forM_ nameAndTy $ \(s, ty) -> do
-           let from = sUN ("prim__fromEditor" ++ s)
-           let to = sUN ("prim__toEditor" ++ s)
-           updateContext (addOperator from (fromEditorTy ty) 1 p)
-           setTotality from (Total [])
-           updateContext (addOperator to (toEditorTy ty) 1 p)
-           setTotality to (Total [])
-           i <- getIState
-           putIState i {
-             idris_scprims = (from, (4, LNoOp)) : (to, (4, LNoOp)) : idris_scprims i }
-
 
 elabDecls :: ElabInfo -> [PDecl] -> Idris ()
 elabDecls info ds = do mapM_ (elabDecl EAll info) ds

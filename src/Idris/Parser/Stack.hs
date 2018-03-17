@@ -33,7 +33,7 @@ module Idris.Parser.Stack
 where
 
 import Idris.Core.TT (FC(..))
-import {-# SOURCE #-} Idris.Output (Message(..))
+import Idris.Output (Message(..))
 
 import Control.Arrow (app)
 import Control.Monad.State.Strict (StateT(..), evalStateT)
