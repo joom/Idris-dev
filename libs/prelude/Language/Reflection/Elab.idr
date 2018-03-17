@@ -131,6 +131,22 @@ record Datatype where
   ||| The constructors for the family
   constructors : List (TTName, List CtorArg, Raw)
 
+
+||| An indexed family describing which types have the primitive translation,
+||| that will be used in `fromEditor` and `toEditor`.
+data HasEditorPrim : Type -> Type where
+  HasTT        : HasEditorPrim TT
+  HasTyDecl    : HasEditorPrim TyDecl
+  HasDataDefn  : HasEditorPrim DataDefn
+  HasFunDefn   : HasEditorPrim (FunDefn TT)
+  HasFunClause : HasEditorPrim (FunClause TT)
+
+||| The S-expression data type. Has a direct correspondence to the
+||| S-expression type in the IDE mode in the Idris implementation.
+data SExp =
+   SExpList (List SExp) | StringAtom String | BoolAtom Bool |
+   IntegerAtom Integer | SymbolAtom String
+
 ||| A reflected elaboration script.
 export
 data Elab : Type -> Type where
@@ -195,6 +211,10 @@ data Elab : Type -> Type where
 
   Prim__Debug : {a : Type} -> List ErrorReportPart -> Elab a
   Prim__Metavar : TTName -> Elab ()
+
+  -- Editorable primitives
+  Prim__FromEditor : {a : Type} -> HasEditorPrim a -> SExp -> Elab a
+  Prim__ToEditor : {a : Type} -> HasEditorPrim a -> a -> Elab SExp
 
 -------------
 -- Public API
@@ -640,6 +660,20 @@ namespace Tactics
   runElab : Raw -> Elab () -> Elab (TT, TT)
   runElab goal script = Prim__RecursiveElab goal script
 
+  ||| Given that there's a primitive translation for a type for the editor,
+  ||| use it to parse an `SExp` into that type.
+  ||| This is exported so that it can be used in `Language.Reflection.Editor`.
+  export
+  prim__fromEditor : {auto has : HasEditorPrim a} -> SExp -> Elab a
+  prim__fromEditor {has = x} sexp = Prim__FromEditor x sexp
+
+  ||| Given that there's a primitive translation for a type for the editor,
+  ||| use it to convert that type into an `SExp`.
+  ||| This is exported so that it can be used in `Language.Reflection.Editor`.
+  export
+  prim__toEditor : {auto has : HasEditorPrim a} -> a -> Elab SExp
+  prim__toEditor {has = x} y = Prim__ToEditor x y
+
 ---------------------------
 -- Quotable Implementations
 ---------------------------
@@ -773,3 +807,21 @@ implementation Quotable Datatype Raw where
   quotedTy = `(Datatype)
   quote (MkDatatype name tyConArgs tyConRes constructors) =
     `(MkDatatype ~(quote name) ~(quote tyConArgs) ~(quote tyConRes) ~(quote constructors))
+
+implementation Quotable SExp TT where
+  quotedTy = `(SExp)
+  quote (SExpList xs) = assert_total `(SExpList ~(quote xs))
+  quote (StringAtom s) = `(StringAtom ~(quote s))
+  quote (SymbolAtom s) = `(SymbolAtom ~(quote s))
+  quote (BoolAtom True) = `(BoolAtom True)
+  quote (BoolAtom False) = `(BoolAtom False)
+  quote (IntegerAtom i) = `(IntegerAtom ~(quote i))
+
+implementation Quotable SExp Raw where
+  quotedTy = `(SExp)
+  quote (SExpList xs) = assert_total `(SExpList ~(quote xs))
+  quote (StringAtom s) = `(StringAtom ~(quote s))
+  quote (SymbolAtom s) = `(SymbolAtom ~(quote s))
+  quote (BoolAtom True) = `(BoolAtom True)
+  quote (BoolAtom False) = `(BoolAtom False)
+  quote (IntegerAtom i) = `(IntegerAtom ~(quote i))

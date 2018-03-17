@@ -85,8 +85,8 @@ elabEditAt fn nameStr l args =
          let tm' = normalise ctxt [] tm
          (tm'', _) <- tclift $ elaborate "(toplevel)" ctxt
             (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
-            Erased initEState (reifyEither tm' >>=
-              \case Right x -> return x ; Left _ -> fail "Left")
+            Erased initEState
+            (runElabAction toplevel ist NoFC [] tm' [])
          return $ forget tm''
      -- 5) build up a Term which is a function application
      --    of the original tactic and all the functions
@@ -106,7 +106,8 @@ elabEditAt fn nameStr l args =
      -- reify the SExp TT term into a Haskell SExp
      (resSExp, _) <- tclift $ elaborate "(toplevel)" ctxt
        (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
-       Erased initEState (reifySExp tm')
+       Erased initEState
+       (runElabAction toplevel ist NoFC [] tm' [] >>= reifySExp)
      -- send it back to the editor
      case idris_outputmode ist of
        RawOutput _ -> fail "Not in IDE mode"

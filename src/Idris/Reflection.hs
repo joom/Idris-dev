@@ -1273,17 +1273,17 @@ reifyEither (App _ (App _ (App _ (P _ n _) _) _) x)
 reifyEither _ = fail "Not Left or Right"
 
 reflectSExp :: SExp -> Raw
-reflectSExp (StringAtom s)  = RApp (Var $ editN "StringAtom")  $ RConstant (Str s)
-reflectSExp (SymbolAtom s)  = RApp (Var $ editN "SymbolAtom")  $ RConstant (Str s)
-reflectSExp (BoolAtom b)    = RApp (Var $ editN "BoolAtom")    $ reflectBool b
-reflectSExp (IntegerAtom i) = RApp (Var $ editN "IntegerAtom") $ RConstant (BI i)
-reflectSExp (SexpList l)    = RApp (Var $ editN "SExpList") $ reflectList (Var $ editN "SExp") (map reflectSExp l)
+reflectSExp (StringAtom s)  = RApp (Var $ tacN "StringAtom")  $ RConstant (Str s)
+reflectSExp (SymbolAtom s)  = RApp (Var $ tacN "SymbolAtom")  $ RConstant (Str s)
+reflectSExp (BoolAtom b)    = RApp (Var $ tacN "BoolAtom")    $ reflectBool b
+reflectSExp (IntegerAtom i) = RApp (Var $ tacN "IntegerAtom") $ RConstant (BI i)
+reflectSExp (SexpList l)    = RApp (Var $ tacN "SExpList") $ reflectList (Var $ tacN "SExp") (map reflectSExp l)
 
 reifySExp :: Term -> ElabD SExp
 reifySExp (App _ (P _ n _) x)
-  | n == editN "StringAtom"  = StringAtom  <$> reifyString x
-  | n == editN "SymbolAtom"  = SymbolAtom  <$> reifyString x
-  | n == editN "BoolAtom"    = BoolAtom    <$> reifyBool x
-  | n == editN "IntegerAtom" = IntegerAtom <$> reifyInteger x
-  | n == editN "SExpList"    = SexpList    <$> reifyList reifySExp x
+  | n == tacN "StringAtom"  = StringAtom  <$> reifyString x
+  | n == tacN "SymbolAtom"  = SymbolAtom  <$> reifyString x
+  | n == tacN "BoolAtom"    = BoolAtom    <$> reifyBool x
+  | n == tacN "IntegerAtom" = IntegerAtom <$> reifyInteger x
+  | n == tacN "SExpList"    = SexpList    <$> reifyList reifySExp x
 reifySExp tm = fail $ "Not an SExp: " ++ show tm

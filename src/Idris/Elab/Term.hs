@@ -26,8 +26,11 @@ import Idris.Elab.Utils
 import Idris.Error
 import Idris.ErrReverse (errReverse)
 import Idris.Options
+import {-# SOURCE #-} Idris.Parser
+import Idris.Parser.Stack (prettyError)
 import Idris.ProofSearch
 import Idris.Reflection
+import Idris.SExp
 import Idris.Termination (buildSCG, checkDeclTotality, checkPositive)
 import Control.Applicative ((<$>))
 import Control.Monad
@@ -2305,7 +2308,68 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
            msg' <- eval msg
            parts <- reifyReportParts msg
            debugElaborator parts
+      | n == tacN "Prim__FromEditor"
+      = do ~[ty, hasEditorPrim, arg] <- tacTmArgs 3 tac args
+           ty' <- eval ty
+           arg' <- eval arg
+           case ty' of
+             -- fromEditor with TT
+             P _ tyN _ | tyN == reflm "TT" ->
+               handle arg' $ \s -> do
+                 case parseExpr idrisInit s of
+                   Left err -> lift . tfail . Msg . prettyError $ err
+                   -- 1) Parse the surface syntax
+                   Right pterm -> do
+                     ctxt <- get_context
+                     case elaborate (constraintNS toplevel) ctxt emptyContext
+                                 0 (sMN 0 "toRaw") Erased initEState
+                                 (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
+                       Error err -> lift . tfail $ err
+                       -- 2) Elaborate that into the core language
+                       OK (result, _) -> do
+                         let tm = resultTerm result
+                         -- 3) Reflect that to Raw in the core language and add Just
+                         let reflected = reflect tm
+                         -- 4) Typecheck the reflected term from Raw to TT
+                         case check ctxt [] reflected of
+                           Error err -> lift . tfail $ err
+                           -- 5) Evaluate and return the TT
+                           OK (tmReflected, _) -> eval tmReflected
+             -- fromEditor with TyDecl
+             P _ tyN _ | tyN == tacN "TyDecl" -> undefined
+             _ -> elabScriptStuck tac
+      | n == tacN "Prim__ToEditor"
+      = do ~[ty, hasEditorPrim, arg] <- tacTmArgs 3 tac args
+           ty' <- eval ty
+           arg' <- eval arg
+           case ty' of
+             -- toEditor with TT
+             P _ tyN _ | tyN == reflm "TT" -> do
+               ctxt <- get_context
+               case elaborate (constraintNS toplevel) ctxt emptyContext 0
+                       (sMN 0 "evalElab") Erased initEState (reifyTT arg) of
+                 Error err -> lift . tfail $ err
+                 OK (v, _) -> do
+                   let pterm = delabSugared idrisInit v
+                   let s = showTmOpts defaultPPOption pterm
+                   case check ctxt [] (reflectSExp (StringAtom s)) of
+                     Error err -> lift . tfail $ err
+                     OK (tm, _) -> eval tm
+             -- toEditor with TyDecl
+             P _ tyN _ | tyN == tacN "TyDecl" -> undefined
+             _ -> elabScriptStuck tac
     runTacTm x = elabScriptStuck x
+
+    handle :: Term -> (String -> ElabD Term) -> ElabD Term
+    handle arg f = do
+      ctxt <- get_context
+      case elaborate (constraintNS toplevel) ctxt emptyContext 0
+              (sMN 0 "evalElab") Erased initEState
+              (reifySExp arg >>= \case
+                  StringAtom s -> f s
+                  _ -> lift . tfail . Msg $ "Not a StringAtom") of
+        Error err -> lift . tfail $ err
+        OK (v, _) -> return v
 
 -- Running tactics directly
 -- if a tactic adds unification problems, return an error
