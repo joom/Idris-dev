@@ -41,6 +41,7 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import qualified Data.Set as S
 import Debug.Trace
+import Text.PrettyPrint.Annotated.Leijen (display, renderPretty)
 
 data ElabMode = ETyDecl | ETransLHS | ELHS | EImpossible | ERHS
   deriving Eq
@@ -2336,7 +2337,15 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                            -- 5) Evaluate and return the TT
                            OK (tmReflected, _) -> eval tmReflected
              -- fromEditor with TyDecl
-             P _ tyN _ | tyN == tacN "TyDecl" -> undefined
+             P _ tyN _ | tyN == tacN "TyDecl" ->
+               handle arg' $ \s -> do
+                 case parseFnDecl idrisInit s of
+                   Left err -> lift . tfail . Msg . prettyError $ err
+                   -- 1) Parse the surface syntax
+                   Right pdecl@(PTy _ _ _ _ opts n _ tyInPterm) -> do
+                     ctxt <- get_context
+                     undefined
+                   Right _ -> lift . tfail . Msg $ "Not TyDecl"
              _ -> elabScriptStuck tac
       | n == tacN "Prim__ToEditor"
       = do ~[ty, hasEditorPrim, arg] <- tacTmArgs 3 tac args
@@ -2351,7 +2360,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                  Error err -> lift . tfail $ err
                  OK (v, _) -> do
                    let pterm = delabSugared idrisInit v
-                   let s = showTmOpts defaultPPOption pterm
+                   let s = printPTerm pterm
                    case check ctxt [] (reflectSExp (StringAtom s)) of
                      Error err -> lift . tfail $ err
                      OK (tm, _) -> eval tm
@@ -2359,6 +2368,12 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
              P _ tyN _ | tyN == tacN "TyDecl" -> undefined
              _ -> elabScriptStuck tac
     runTacTm x = elabScriptStuck x
+
+    printPTerm :: PTerm -> String
+    printPTerm = display . renderPretty 0.8 10000
+               . pprintPTerm (ppOptionIst ist) [] []
+                             (idris_infixes ist) -- (idris_implicits ist)
+
 
     handle :: Term -> (String -> ElabD Term) -> ElabD Term
     handle arg f = do

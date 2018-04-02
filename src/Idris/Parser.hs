@@ -13,7 +13,8 @@ Maintainer  : The Idris Community.
 {-# OPTIONS_GHC -fwarn-unused-imports #-}
 
 module Idris.Parser(IdrisParser(..), ImportInfo(..), moduleName, addReplSyntax, clearParserWarnings,
-                    decl, fixColour, loadFromIFile, loadModule, name, opChars, parseElabShellStep, parseConst, parseExpr, parseImports, parseTactic,
+                    decl, fixColour, loadFromIFile, loadModule, name, opChars, parseElabShellStep, parseConst,
+                    parseExpr, parseImports, parseTactic, parseFnDecl,
                     runparser, ParseError, parseErrorDoc) where
 
 import Idris.AbsSyntax hiding (namespace, params)
@@ -1451,6 +1452,10 @@ runElabDecl syn =
 {-| Parses an expression from input -}
 parseExpr :: IState -> String -> Either ParseError PTerm
 parseExpr st = runparser (fullExpr defaultSyntax) st "(input)"
+
+{-| Parses a function declaration from input -}
+parseFnDecl :: IState -> String -> Either ParseError PDecl
+parseFnDecl st = runparser (fnDecl' defaultSyntax) st "(input)"
 
 {-| Parses a constant form input -}
 parseConst :: IState -> String -> Either ParseError Const

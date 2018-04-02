@@ -42,6 +42,12 @@ instance NFData OutputMode where
   rnf (RawOutput x) = ()
   rnf (IdeMode x y) = rnf x `seq` ()
 
+-- IntervalMap doesn't have NFData or Generic instances
+-- TODO: Fix this if we update to >= fingertree-0.1.4.1
+-- We have to check if it's included in the next Stackage release
+instance NFData SourceMap where
+  rnf (SourceMap intervalmap) = intervalmap `seq` ()
+
 instance NFData a => NFData (D.Docstring a)
 instance NFData ConsoleWidth
 instance NFData PrimFn

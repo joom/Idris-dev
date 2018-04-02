@@ -38,7 +38,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.State.Strict
 import Data.Char
 import Data.Data (Data)
-
+import qualified Data.IntervalMap.FingerTree as I
 import Data.Foldable (Foldable)
 import Data.Function (on)
 import Data.Generics.Uniplate.Data (children, universe)
@@ -211,6 +211,12 @@ data InteractiveOpts = InteractiveOpts {
   , interactiveOpts_indentClause :: Int
 } deriving (Show, Generic)
 
+-- | A way to map source locations to a local context, i.e. environment.
+-- Wrapped in a new type to avoid an NFData orphan instance.
+newtype SourceMap = SourceMap {
+  sourcemap :: I.IntervalMap (Int, Int) Env
+} deriving (Show)
+
 -- | The global state used in the Idris monad
 data IState = IState {
     tt_ctxt            :: Context            -- ^ All the currently defined names and their terms
@@ -310,6 +316,7 @@ data IState = IState {
   , idris_ttstats                :: M.Map Term (Int, Term)
   , idris_fragile                :: Ctxt String               -- ^ Fragile names and explanation.
   , idris_interactiveOpts        :: InteractiveOpts
+  , idris_sourcemap              :: SourceMap
   } deriving Generic
 
 -- Required for parsers library, and therefore trifecta
@@ -413,7 +420,8 @@ idrisInit = IState initContext S.empty []
                    [] [] Nothing [] Nothing [] [] Nothing emptyContext Private DefaultCheckingPartial [] Nothing [] []
                    (RawOutput stdout) True defaultTheme [] (0, emptyContext) emptyContext M.empty
                    AutomaticWidth S.empty S.empty [] [] [] M.empty [] [] []
-                   emptyContext S.empty M.empty emptyContext initialInteractiveOpts
+                   emptyContext S.empty M.empty emptyContext
+                   initialInteractiveOpts (SourceMap I.empty)
 
 
 -- | The monad for the main REPL - reading and processing files and
@@ -1295,6 +1303,9 @@ highestFC (PQuoteName _ _ fc)     = Just fc
 highestFC (PRunElab fc _ _)       = Just fc
 highestFC (PConstSugar fc _)      = Just fc
 highestFC (PAppImpl t _)          = highestFC t
+
+ptermInterval :: PTerm -> Maybe (I.Interval (Int, Int))
+ptermInterval p = highestFC p >>= fc_interval
 
 -- Interface data
 

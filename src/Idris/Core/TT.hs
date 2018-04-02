@@ -38,7 +38,7 @@ module Idris.Core.TT(
   , UConstraint(..), UCs(..), UExp(..), Universe(..)
   , addAlist, addBinder, addDef, allTTNames, arity, bindAll
   , bindingOf, bindTyArgs, caseName, constDocs, constIsType, deleteDefExact
-  , discard, emptyContext, emptyFC, explicitNames, fc_end, fc_fname
+  , discard, emptyContext, emptyFC, explicitNames, fc_end, fc_fname, fc_interval
   , fc_start, fcIn, fileFC, finalise, fmapMB, forget, forgetEnv
   , freeNames, getArgTys, getRetTy, substRetTy, implicitable, instantiate, internalNS
   , intTyName, isInjective, isTypeConst, lookupCtxt
@@ -75,6 +75,7 @@ import Data.Binary hiding (get, put)
 import Data.Char
 import Data.Data (Data)
 import Data.Foldable (Foldable)
+import qualified Data.IntervalMap.FingerTree as I
 import Data.List hiding (group, insert)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (listToMaybe)
@@ -120,6 +121,10 @@ fc_end :: FC -> (Int, Int)
 fc_end (FC _ _ end) = end
 fc_end NoFC = (0, 0)
 fc_end (FileFC f) = (0, 0)
+
+fc_interval :: FC -> Maybe (I.Interval (Int, Int))
+fc_interval (FC _ start end) = Just (I.Interval start end)
+fc_interval _ = Nothing
 
 #if (MIN_VERSION_base(4,11,0))
 instance S.Semigroup FC where
