@@ -5,7 +5,7 @@ Description : Idris' theorem prover.
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, RecordWildCards #-}
 module Idris.Prover (prover, showProof, showRunElab, elabStep) where
 
 -- Hack for GHC 7.10 and earlier compat without CPP or warnings
@@ -90,11 +90,11 @@ prove mode info opt ctxt lit n ty
          idemodePutSExp "start-proof-mode" n
          (tm, prf) <-
             if mode
-              then elabloop info n True ("-" ++ show n) [] (ES (ps, initEState) "" Nothing) [] Nothing []
+              then elabloop info n True ("-" ++ show n) [] (initElabState ps initEState) [] Nothing []
               else do iputStrLn $ "Warning: this interactive prover is deprecated and will be removed " ++
                                   "in a future release. Please see :elab for a similar feature that "++
                                   "will replace it."
-                      ploop n True ("-" ++ show n) [] (ES (ps, initEState) "" Nothing) Nothing
+                      ploop n True ("-" ++ show n) [] (initElabState ps initEState) Nothing
          logLvl 1 $ "Adding " ++ show tm
          i <- getIState
          let shower = if mode
@@ -132,10 +132,11 @@ prove mode info opt ctxt lit n ty
 elabStep :: ElabState EState -> ElabD a -> Idris (a, ElabState EState)
 elabStep st e =
     case runStateT eCheck st of
-        OK ((a, ctxt'), ES (ps, est@EState{new_tyDecls = declTodo}) x old) ->
-          do setContext ctxt'
+        OK ((a, ctxt'), es@ES{..}) ->
+          do let est@EState{new_tyDecls = declTodo} = elab_aux
+             setContext ctxt'
              processTacticDecls toplevel declTodo
-             return (a, ES (ps, est {new_tyDecls = []}) x old)
+             return (a, es {elab_aux = est {new_tyDecls = []}})
         Error a -> ierror a
   where eCheck = do res <- e
                     matchProblems True

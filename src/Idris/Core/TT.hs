@@ -33,13 +33,13 @@ module Idris.Core.TT(
   , Env(..), EnvTT(..), Err(..), Err'(..), ErrorReportPart(..)
   , FC(..), FC'(..), ImplicitInfo(..), IntTy(..), Name(..)
   , NameOutput(..), NameType(..), NativeTy(..), OutputAnnotation(..)
-  , Provenance(..), Raw(..), RigCount(..), SpecialName(..), TC(..), Term(..)
-  , TermSize(..), TextFormatting(..), TT(..),Type(..), TypeInfo(..)
-  , UConstraint(..), UCs(..), UExp(..), Universe(..)
+  , Provenance(..), Raw(..), RigCount(..), SourceMap(..), SpecialName(..)
+  , TC(..), Term(..), TermSize(..), TextFormatting(..), TT(..), Type(..)
+  , TypeInfo(..) , UConstraint(..), UCs(..), UExp(..), Universe(..)
   , addAlist, addBinder, addDef, allTTNames, arity, bindAll
   , bindingOf, bindTyArgs, caseName, constDocs, constIsType, deleteDefExact
-  , discard, emptyContext, emptyFC, explicitNames, fc_end, fc_fname, fc_interval
-  , fc_start, fcIn, fileFC, finalise, fmapMB, forget, forgetEnv
+  , discard, emptyContext, emptyFC, emptySourceMap, explicitNames, fc_end, fc_fname
+  , fc_interval , fc_start, fcIn, fileFC, finalise, fmapMB, forget, forgetEnv
   , freeNames, getArgTys, getRetTy, substRetTy, implicitable, instantiate, internalNS
   , intTyName, isInjective, isTypeConst, lookupCtxt
   , lookupCtxtExact, lookupCtxtName, mapCtxt, mkApp, nativeTyWidth
@@ -130,6 +130,15 @@ fc_interval _ = Nothing
 instance S.Semigroup FC where
     (<>) = mappend
 #endif
+
+-- | A way to map source locations to a local context, i.e. environment.
+-- Wrapped in a new type to avoid an NFData orphan instance.
+newtype SourceMap = SourceMap {
+  sourcemap :: I.IntervalMap (Int, Int) Env
+} deriving (Show)
+
+emptySourceMap :: SourceMap
+emptySourceMap = SourceMap I.empty
 
 instance Monoid FC where
   mempty = NoFC

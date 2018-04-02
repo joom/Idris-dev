@@ -211,12 +211,6 @@ data InteractiveOpts = InteractiveOpts {
   , interactiveOpts_indentClause :: Int
 } deriving (Show, Generic)
 
--- | A way to map source locations to a local context, i.e. environment.
--- Wrapped in a new type to avoid an NFData orphan instance.
-newtype SourceMap = SourceMap {
-  sourcemap :: I.IntervalMap (Int, Int) Env
-} deriving (Show)
-
 -- | The global state used in the Idris monad
 data IState = IState {
     tt_ctxt            :: Context            -- ^ All the currently defined names and their terms
@@ -421,7 +415,7 @@ idrisInit = IState initContext S.empty []
                    (RawOutput stdout) True defaultTheme [] (0, emptyContext) emptyContext M.empty
                    AutomaticWidth S.empty S.empty [] [] [] M.empty [] [] []
                    emptyContext S.empty M.empty emptyContext
-                   initialInteractiveOpts (SourceMap I.empty)
+                   initialInteractiveOpts emptySourceMap
 
 
 -- | The monad for the main REPL - reading and processing files and

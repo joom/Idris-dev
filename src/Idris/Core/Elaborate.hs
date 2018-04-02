@@ -10,7 +10,7 @@ because this gives us a language to build derived tactics out of the
 primitives.
 -}
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, PatternGuards #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, PatternGuards, RecordWildCards #-}
 module Idris.Core.Elaborate (
     module Idris.Core.Elaborate
   , module Idris.Core.ProofState
@@ -27,14 +27,19 @@ import Idris.Core.Unify
 import Control.Monad.State.Strict
 import Data.List
 
-data ElabState aux = ES (ProofState, aux) String (Maybe (ElabState aux))
-  deriving Show
+data ElabState aux = ES {
+    proof          :: ProofState
+  , elab_aux       :: aux
+  , elab_log       :: String
+  , load_slot      :: Maybe (ElabState aux)
+  , elab_sourcemap :: SourceMap
+  } deriving Show
+
+initElabState :: ProofState -> aux -> ElabState aux
+initElabState ps a = ES ps a "" Nothing emptySourceMap
 
 type Elab' aux a = StateT (ElabState aux) TC a
 type Elab a = Elab' () a
-
-proof :: ElabState aux -> ProofState
-proof (ES (p, _) _ _) = p
 
 -- Insert a 'proofSearchFail' error if necessary to shortcut any further
 -- fruitless searching
@@ -46,39 +51,37 @@ proofFail e = do s <- get
                       Error err -> lift $ Error (ProofSearchFail err)
 
 explicit :: Name -> Elab' aux ()
-explicit n = do ES (p, a) s m <- get
-                let p' = p { dontunify = n : dontunify p }
-                put (ES (p', a) s m)
+explicit n = do es@ES{..} <- get
+                put (es {proof = proof { dontunify = n : dontunify proof }})
 
 -- Add a name that's okay to use in proof search (typically either because
--- it was given explicitly on the lhs, or intrduced as an explicit lambda
+-- it was given explicitly on the lhs, or introduced as an explicit lambda
 -- or let binding)
 addPSname :: Name -> Elab' aux ()
 addPSname n@(UN _)
-     = do ES (p, a) s m <- get
-          let p' = p { psnames = n : psnames p }
-          put (ES (p', a) s m)
+     = do es@ES{..} <- get
+          let p' = proof { psnames = n : psnames proof }
+          put (es {proof = p'})
 addPSname _ = return () -- can only use user given names
 
 getPSnames :: Elab' aux [Name]
-getPSnames = do ES (p, a) s m <- get
-                return (psnames p)
+getPSnames = (psnames . proof) <$> get
 
 saveState :: Elab' aux ()
-saveState = do e@(ES p s _) <- get
-               put (ES p s (Just e))
+saveState = do es <- get
+               put (es {load_slot = Just es})
 
 loadState :: Elab' aux ()
-loadState = do (ES p s e) <- get
-               case e of
+loadState = do ES{..} <- get
+               case load_slot of
                   Just st -> put st
                   _ -> lift $ Error . Msg $ "Nothing to undo"
 
 getNameFrom :: Name -> Elab' aux Name
-getNameFrom n = do (ES (p, a) s e) <- get
-                   let next = nextname p
-                   let p' = p { nextname = next + 1 }
-                   put (ES (p', a) s e)
+getNameFrom n = do es@(ES{..}) <- get
+                   let next = nextname proof
+                   let p' = proof { nextname = next + 1 }
+                   put (es {proof = p'})
                    let n' = case n of
                         UN x -> MN (next+100) x
                         MN i x -> if i == 99999
@@ -90,14 +93,14 @@ getNameFrom n = do (ES (p, a) s e) <- get
 
 setNextName :: Elab' aux ()
 setNextName = do env <- get_env
-                 ES (p, a) s e <- get
-                 let pargs = map fst (getArgTys (ptype p))
+                 ES{..} <- get
+                 let pargs = map fst (getArgTys (ptype proof))
                  initNextNameFrom (pargs ++ map fstEnv env)
 
 initNextNameFrom :: [Name] -> Elab' aux ()
-initNextNameFrom ns = do ES (p, a) s e <- get
-                         let n' = maxName (nextname p) ns
-                         put (ES (p { nextname = n' }, a) s e)
+initNextNameFrom ns = do es@ES{..} <- get
+                         let n' = maxName (nextname proof) ns
+                         put (es {proof = proof {nextname = n'}})
   where
     maxName m ((MN i _) : xs) = maxName (max m i) xs
     maxName m (_ : xs) = maxName m xs
@@ -139,10 +142,10 @@ erun f e = do (x, _) <- erunAux f e
               return x
 
 runElab :: aux -> Elab' aux a -> ProofState -> TC (a, ElabState aux)
-runElab a e ps = runStateT e (ES (ps, a) "" Nothing)
+runElab a e ps = runStateT e (initElabState ps a)
 
 execElab :: aux -> Elab' aux a -> ProofState -> TC (ElabState aux)
-execElab a e ps = execStateT e (ES (ps, a) "" Nothing)
+execElab a e ps = execStateT e (initElabState ps a)
 
 initElaborator :: Name -- ^ the name of what's to be elaborated
                -> String -- ^ the current source file
@@ -156,38 +159,39 @@ initElaborator = newProof
 elaborate :: String -> Context -> Ctxt TypeInfo -> Int -> Name -> Type -> aux -> Elab' aux a -> TC (a, String)
 elaborate tcns ctxt datatypes globalNames n ty d elab =
   do let ps = initElaborator n tcns ctxt datatypes globalNames ty
-     (a, ES ps' str _) <- runElab d elab ps
-     return $! (a, str)
+     (a, ES{..}) <- runElab d elab ps
+     return $! (a, elab_log)
 
 -- | Modify the auxiliary state
 updateAux :: (aux -> aux) -> Elab' aux ()
-updateAux f = do ES (ps, a) l p <- get
-                 put (ES (ps, f a) l p)
+updateAux f = do es@ES{..} <- get
+                 put (es {elab_aux = f elab_aux})
 
 -- | Get the auxiliary state
 getAux :: Elab' aux aux
-getAux = do ES (ps, a) _ _ <- get
-            return $! a
+getAux = do ES{..} <- get
+            return $! elab_aux
 
 -- | Set whether to show the unifier log
 unifyLog :: Bool -> Elab' aux ()
-unifyLog log = do ES (ps, a) l p <- get
-                  put (ES (ps { unifylog = log }, a) l p)
+unifyLog log = do es@ES{..} <- get
+                  put (es {proof = proof {unifylog = log}})
 
 getUnifyLog :: Elab' aux Bool
-getUnifyLog = do ES (ps, a) l p <- get
-                 return (unifylog ps)
+getUnifyLog = do ES{..} <- get
+                 return (unifylog proof)
 
 -- | Process a tactic within the current elaborator state
 processTactic' :: Tactic -> Elab' aux ()
-processTactic' t = do ES (p, a) logs prev <- get
-                      (p', log) <- lift $ processTactic t p
-                      put (ES (p', a) (logs ++ log) prev)
+processTactic' t = do es@ES{..} <- get
+                      (p', log) <- lift $ processTactic t proof
+                      put (es {proof = p', elab_log = elab_log ++ log})
                       return $! ()
 
+
 updatePS :: (ProofState -> ProofState) -> Elab' aux ()
-updatePS f = do ES (ps, a) logs prev <- get
-                put $ ES (f ps, a) logs prev
+updatePS f = do es@ES{..} <- get
+                put $ es {proof = f proof}
 
 now_elaborating :: FC -> Name -> Name -> Elab' aux ()
 now_elaborating fc f a = updatePS (nowElaboratingPS fc f a)
@@ -196,99 +200,99 @@ done_elaborating_app f = updatePS (doneElaboratingAppPS f)
 done_elaborating_arg :: Name -> Name -> Elab' aux ()
 done_elaborating_arg f a = updatePS (doneElaboratingArgPS f a)
 elaborating_app :: Elab' aux [(FC, Name, Name)]
-elaborating_app = do ES (ps, _) _ _ <- get
+elaborating_app = do ES{..} <- get
                      return $ map (\ (FailContext x y z) -> (x, y, z))
-                                  (while_elaborating ps)
+                                  (while_elaborating proof)
 
 -- Some handy gadgets for pulling out bits of state
 
 -- | Get the global context
 get_context :: Elab' aux Context
-get_context = do ES p _ _ <- get
-                 return $! (context (fst p))
+get_context = do ES{..} <- get
+                 return $! (context proof)
 
 -- | Update the context.
 -- (should only be used for adding temporary definitions or all sorts of
 --  stuff could go wrong)
 set_context :: Context -> Elab' aux ()
-set_context ctxt = do ES (p, a) logs prev <- get
-                      put (ES (p { context = ctxt }, a) logs prev)
+set_context ctxt = do es@ES{..} <- get
+                      put (es {proof = proof {context = ctxt}})
 
 get_datatypes :: Elab' aux (Ctxt TypeInfo)
-get_datatypes = do ES p _ _ <- get
-                   return $! (datatypes (fst p))
+get_datatypes = do ES{..} <- get
+                   return $! (datatypes proof)
 
 set_datatypes :: Ctxt TypeInfo -> Elab' aux ()
-set_datatypes ds = do ES (p, a) logs prev <- get
-                      put (ES (p { datatypes = ds }, a) logs prev)
+set_datatypes ds = do es@ES{..} <- get
+                      put (es {proof = proof {datatypes = ds}})
 
 get_global_nextname :: Elab' aux Int
-get_global_nextname = do ES (ps, _) _ _ <- get
-                         return (global_nextname ps)
+get_global_nextname = do ES{..} <- get
+                         return (global_nextname proof)
 
 set_global_nextname :: Int -> Elab' aux ()
-set_global_nextname i = do ES (ps, a) logs prev <- get
-                           put $ ES (ps { global_nextname = i}, a) logs prev
+set_global_nextname i = do es@ES{..} <- get
+                           put (es {proof = proof {global_nextname = i}})
 
 -- | get the proof term
 get_term :: Elab' aux Term
-get_term = do ES p _ _ <- get
-              return $! (getProofTerm (pterm (fst p)))
+get_term = do ES{..} <- get
+              return $! (getProofTerm (pterm proof))
 
 -- | modify the proof term
 update_term :: (Term -> Term) -> Elab' aux ()
-update_term f = do ES (p,a) logs prev <- get
-                   let p' = p { pterm = mkProofTerm (f (getProofTerm (pterm p))) }
-                   put (ES (p', a) logs prev)
+update_term f = do es@ES{..} <- get
+                   let p' = proof { pterm = mkProofTerm (f (getProofTerm (pterm proof))) }
+                   put $ es {proof = p'}
 
 -- | get the local context at the currently in focus hole
 get_env :: Elab' aux Env
-get_env = do ES p _ _ <- get
-             lift $ envAtFocus (fst p)
+get_env = do ES{..} <- get
+             lift $ envAtFocus proof
 
 get_inj :: Elab' aux [Name]
-get_inj = do ES p _ _ <- get
-             return $! (injective (fst p))
+get_inj = do ES{..} <- get
+             return $! (injective proof)
 
 get_holes :: Elab' aux [Name]
-get_holes = do ES p _ _ <- get
-               return $! (holes (fst p))
+get_holes = do ES{..} <- get
+               return $! (holes proof)
 
 get_usedns :: Elab' aux [Name]
-get_usedns = do ES p _ _ <- get
-                let bs = bound_in (pterm (fst p)) ++
-                         bound_in_term (ptype (fst p))
-                let nouse = holes (fst p) ++ bs ++ dontunify (fst p) ++ usedns (fst p)
+get_usedns = do ES{..} <- get
+                let bs = bound_in (pterm proof) ++
+                         bound_in_term (ptype proof)
+                let nouse = holes proof ++ bs ++ dontunify proof ++ usedns proof
                 return $! nouse
 
 get_probs :: Elab' aux Fails
-get_probs = do ES p _ _ <- get
-               return $! (problems (fst p))
+get_probs = do ES{..} <- get
+               return $! (problems proof)
 
 -- | Return recently solved names (that is, the names solved since the
 -- last call to get_recents)
 get_recents :: Elab' aux [Name]
-get_recents = do ES (p, a) l prev <- get
-                 put (ES (p { recents = [] }, a) l prev)
-                 return (recents p)
+get_recents = do es@ES{..} <- get
+                 put $ es {proof = proof {recents = []}}
+                 return (recents proof)
 
 -- | get the current goal type
 goal :: Elab' aux Type
-goal = do ES p _ _ <- get
-          b <- lift $ goalAtFocus (fst p)
+goal = do ES{..} <- get
+          b <- lift $ goalAtFocus proof
           return $! (binderTy b)
 
 is_guess :: Elab' aux Bool
-is_guess = do ES p _ _ <- get
-              b <- lift $ goalAtFocus (fst p)
+is_guess = do ES{..} <- get
+              b <- lift $ goalAtFocus proof
               case b of
                    Guess _ _ -> return True
                    _ -> return False
 
 -- | Get the guess at the current hole, if there is one
 get_guess :: Elab' aux Term
-get_guess = do ES p _ _ <- get
-               b <- lift $ goalAtFocus (fst p)
+get_guess = do ES{..} <- get
+               b <- lift $ goalAtFocus proof
                case b of
                     Guess t v -> return $! v
                     _ -> fail "Not a guess"
@@ -308,8 +312,8 @@ get_type_val tm = do ctxt <- get_context
 
 -- | get holes we've deferred for later definition
 get_deferred :: Elab' aux [Name]
-get_deferred = do ES p _ _ <- get
-                  return $! (deferred (fst p))
+get_deferred = do ES{..} <- get
+                  return $! (deferred proof)
 
 checkInjective :: (Term, Term, Term) -> Elab' aux ()
 checkInjective (tm, l, r) = do ctxt <- get_context
@@ -325,13 +329,13 @@ checkInjective (tm, l, r) = do ctxt <- get_context
 
 -- | get implementation argument names
 get_implementations :: Elab' aux [Name]
-get_implementations = do ES p _ _ <- get
-                         return $! (implementations (fst p))
+get_implementations = do ES{..} <- get
+                         return $! (implementations proof)
 
 -- | get auto argument names
 get_autos :: Elab' aux [(Name, ([FailContext], [Name]))]
-get_autos = do ES p _ _ <- get
-               return $! (autos (fst p))
+get_autos = do ES{..} <- get
+               return $! (autos proof)
 
 -- | given a desired hole name, return a unique hole name
 unique_hole :: Name -> Elab' aux Name
@@ -339,25 +343,25 @@ unique_hole = unique_hole' False
 
 unique_hole' :: Bool -> Name -> Elab' aux Name
 unique_hole' reusable n
-      = do ES p _ _ <- get
-           let bs = bound_in (pterm (fst p)) ++
-                    bound_in_term (ptype (fst p))
-           let nouse = holes (fst p) ++ bs ++ dontunify (fst p) ++ usedns (fst p)
-           n' <- return $! uniqueNameCtxt (context (fst p)) n nouse
-           ES (p, a) s u <- get
+      = do ES{..} <- get
+           let bs = bound_in (pterm proof) ++
+                    bound_in_term (ptype proof)
+           let nouse = holes proof ++ bs ++ dontunify proof ++ usedns proof
+           n' <- return $! uniqueNameCtxt (context proof) n nouse
+           es@ES{..} <- get
            case n' of
-                MN i _ -> when (i >= nextname p) $
-                            put (ES (p { nextname = i + 1 }, a) s u)
+                MN i _ -> when (i >= nextname proof) $
+                            put $ es {proof = proof {nextname = i + 1}}
                 _ -> return $! ()
            return $! n'
 
 elog :: String -> Elab' aux ()
-elog str = do ES p logs prev <- get
-              put (ES p (logs ++ str ++ "\n") prev)
+elog str = do es@ES{..} <- get
+              put $ es {elab_log = elab_log ++ str ++ "\n"}
 
 getLog :: Elab' aux String
-getLog = do ES p logs _ <- get
-            return $! logs
+getLog = do ES{..} <- get
+            return $! elab_log
 
 -- The primitives, from ProofState
 
@@ -481,16 +485,16 @@ movelast :: Name -> Elab' aux ()
 movelast n = processTactic' (MoveLast n)
 
 dotterm :: Elab' aux ()
-dotterm = do ES (p, a) s m <- get
+dotterm = do es@ES{..} <- get
              tm <- get_term
-             case holes p of
+             case holes proof of
                   [] -> return ()
                   (h : hs) ->
                      do let outer = findOuter h [] tm
-                        let p' = p { dotted = (h, outer) : dotted p }
+                        let p' = proof { dotted = (h, outer) : dotted proof }
 --                         trace ("DOTTING " ++ show (h, outer) ++ "\n" ++
 --                                show tm) $
-                        put $ ES (p', a) s m
+                        put $ es {proof = p'}
  where
   findOuter h env (P _ n _) | h == n = env
   findOuter h env (Bind n b sc)
@@ -505,15 +509,15 @@ dotterm = do ES (p, a) s m <- get
 
 
 get_dotterm :: Elab' aux [(Name, [Name])]
-get_dotterm = do ES (p, a) s m <- get
-                 return (dotted p)
+get_dotterm = do ES{..} <- get
+                 return (dotted proof)
 
 -- | Set the zipper in the proof state to point at the current sub term
 -- (This currently happens automatically, so this will have no effect...)
 zipHere :: Elab' aux ()
-zipHere = do ES (ps, a) s m <- get
-             let pt' = refocus (Just (head (holes ps))) (pterm ps)
-             put (ES (ps { pterm = pt' }, a) s m)
+zipHere = do es@ES{..}<- get
+             let pt' = refocus (Just (head (holes proof))) (pterm proof)
+             put $ es {proof = proof {pterm = pt'}}
 
 matchProblems :: Bool -> Elab' aux ()
 matchProblems all = processTactic' (MatchProblems all)
@@ -547,8 +551,8 @@ reorder_claims n = processTactic' (Reorder n)
 
 qed :: Elab' aux Term
 qed = do processTactic' QED
-         ES p _ _ <- get
-         return $! (getProofTerm (pterm (fst p)))
+         ES{..} <- get
+         return $! (getProofTerm (pterm proof))
 
 undo :: Elab' aux ()
 undo = processTactic' Undo
@@ -569,11 +573,11 @@ prepare_apply fn imps =
                       else normalise ctxt env (finalise ty)
        claims <- -- trace (show (fn, imps, ty, map fst env, normalise ctxt env (finalise ty))) $
                  mkClaims usety imps [] (map fstEnv env)
-       ES (p, a) s prev <- get
+       es@ES{..} <- get
        -- reverse the claims we made so that args go left to right
        let n = length (filter not imps)
-       let (h : hs) = holes p
-       put (ES (p { holes = h : (reverse (take n hs) ++ drop n hs) }, a) s prev)
+       let (h : hs) = holes proof
+       put $ es {proof = proof { holes = h : (reverse (take n hs) ++ drop n hs) }}
        return $! claims
   where
     argsOK :: Type -> [a] -> Bool
@@ -629,18 +633,19 @@ apply' fillt fn imps =
        -- _Don't_ solve the arguments we're specifying by hand.
        -- (remove from unified list before calling end_unify)
        hs <- get_holes
-       ES (p, a) s prev <- get
+       es@ES{..} <- get
        let dont = if null imps
-                     then head hs : dontunify p
-                     else getNonUnify (head hs : dontunify p) imps args
+                     then head hs : dontunify proof
+                     else getNonUnify (head hs : dontunify proof) imps args
        let (n, hunis) = -- trace ("AVOID UNIFY: " ++ show (fn, dont)) $
-                        unified p
+                        unified proof
        let unify = -- trace ("Not done " ++ show hs) $
                    dropGiven dont hunis hs
        let notunify = -- trace ("Not done " ++ show (hs, hunis)) $
                       keepGiven dont hunis hs
-       put (ES (p { dontunify = dont, unified = (n, unify),
-                    notunified = notunify ++ notunified p }, a) s prev)
+       put $ es {proof = proof {
+         dontunify = dont, unified = (n, unify),
+         notunified = notunify ++ notunified proof }}
        fillt (raw_apply fn (map (Var . snd) args))
        ulog <- getUnifyLog
        g <- goal
@@ -664,7 +669,6 @@ apply2 fn elabs =
     do args <- prepare_apply fn (map isJust elabs)
        fill (raw_apply fn (map (Var . snd) args))
        elabArgs (map snd args) elabs
-       ES (p, a) s prev <- get
        end_unify
        solve
   where elabArgs [] [] = return $! ()
@@ -694,8 +698,8 @@ apply_elab n args =
            case i of
                Nothing -> return $! ()
                Just _ -> -- don't solve by unification as there is an explicit value
-                         do ES (p, a) s prev <- get
-                            put (ES (p { dontunify = n : dontunify p }, a) s prev)
+                         do es@ES{..} <- get
+                            put $ es {proof = proof { dontunify = n : dontunify proof }}
            doClaims sc' is ((n, i) : claims)
     doClaims t [] claims = return $! (reverse claims)
     doClaims _ _ _ = fail $ "Wrong number of arguments for " ++ show n
@@ -706,11 +710,9 @@ apply_elab n args =
                            else return $! ()
     elabClaims failed r ((n, Nothing) : xs) = elabClaims failed r xs
     elabClaims failed r (e@(n, Just (_, elaboration)) : xs)
-        | r = try (do ES p _ _ <- get
-                      focus n; elaboration; elabClaims failed r xs)
+        | r = try (do focus n; elaboration; elabClaims failed r xs)
                   (elabClaims (e : failed) r xs)
-        | otherwise = do ES p _ _ <- get
-                         focus n; elaboration; elabClaims failed r xs
+        | otherwise = do focus n; elaboration; elabClaims failed r xs
 
     mkMN n@(MN _ _) = n
     mkMN n@(UN x) = MN 0 x
@@ -963,16 +965,16 @@ prunStateT
      -> TC ((t1, Int, Idris.Core.Unify.Fails), ElabState t)
 prunStateT pmax zok ps ivs x s
       = case runStateT x s of
-             OK (v, s'@(ES (p, _) _ _)) ->
-                 let newps = length (problems p) - length ps
-                     ibad = badImplementations (implementations p) ivs
+             OK (v, s'@(ES{..})) ->
+                 let newps = length (problems proof) - length ps
+                     ibad = badImplementations (implementations proof) ivs
                      newpmax = if newps < 0 then 0 else newps in
                  if (newpmax > pmax || (not zok && newps > 0)) -- length ps == 0 && newpmax > 0))
-                    then case reverse (problems p) of
+                    then case reverse (problems proof) of
                             ((_,_,_,_,e,_,_):_) -> Error e
                     else if ibad
                             then Error (InternalMsg "Constraint introduced in disambiguation")
-                            else OK ((v, newpmax, problems p), s')
+                            else OK ((v, newpmax, problems proof), s')
              Error e -> Error e
   where
     badImplementations _ Nothing = False

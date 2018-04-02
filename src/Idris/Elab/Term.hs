@@ -5,7 +5,7 @@ Description : Code to elaborate terms.
 License     : BSD3
 Maintainer  : The Idris Community.
 -}
-{-# LANGUAGE LambdaCase, PatternGuards, ViewPatterns #-}
+{-# LANGUAGE LambdaCase, PatternGuards, ViewPatterns, RecordWildCards #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module Idris.Elab.Term where
 
@@ -2196,12 +2196,9 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
              _  -> lift . tfail . Msg $ show n ++ " is already defined as a datatype."
            -- Prepare the constructors
            ctors' <- mapM (prepareConstructor n) ctors
-           ttag <- do ES (ps, aux) str prev <- get
-                      let i = global_nextname ps
-                      put $ ES (ps { global_nextname = global_nextname ps + 1 },
-                                aux)
-                               str
-                               prev
+           ttag <- do es@ES{..} <- get
+                      let i = global_nextname proof
+                      put $ es {proof = proof {global_nextname = i + 1}}
                       return i
            let ctxt' = addDatatype (Data n ttag tyconTy False (map (\(cn, _, cty) -> (cn, cty)) ctors')) ctxt
            set_context ctxt'
@@ -2254,22 +2251,22 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
            env <- get_env
            g_next <- get_global_nextname
 
-           (ctxt', ES (p, aux') _ _) <-
-              do (ES (current_p, _) _ _) <- get
+           (ctxt', es@ES{..}) <-
+              do ES{..} <- get
                  lift $ runElab aux
                              (do runElabAction info ist fc [] script ns
                                  ctxt' <- get_context
                                  return ctxt')
                              ((newProof recH (constraintNS info) ctxt datatypes g_next goalTT)
-                              { nextname = nextname current_p })
+                              { nextname = nextname proof })
            set_context ctxt'
 
-           let tm_out = getProofTerm (pterm p)
-           do (ES (prf, _) s e) <- get
-              let p' = prf { nextname = nextname p
-                           , global_nextname = global_nextname p
-                           }
-              put (ES (p', aux') s e)
+           let tm_out = getProofTerm (pterm proof)
+           do ES{..} <- get
+              let p' = proof { nextname = nextname proof
+                             , global_nextname = global_nextname proof
+                             }
+              put $ es {proof = p', elab_aux = elab_aux}
            env' <- get_env
            (tm, ty, _) <- lift $ recheck (constraintNS info) ctxt' env (forget tm_out) tm_out
            let (tm', ty') = (reflect tm, reflect ty)
