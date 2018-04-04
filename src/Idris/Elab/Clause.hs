@@ -554,7 +554,7 @@ checkPossible info fc tcgen fname lhs_in
         let lhs = addImplPat i lhs_in
         logElab 10 $ "Trying missing case: " ++ showTmImpls lhs
         -- if the LHS type checks, it is possible
-        case elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patLHS") infP initEState
+        case elaborateTC (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patLHS") infP initEState
                             (erun fc (buildTC i info EImpossible [] fname
                                                 (allNamesIn lhs_in)
                                                 (infTerm lhs))) of
@@ -687,7 +687,7 @@ elabClause info opts (cnum, PClause fc fname lhs_in_as withs rhs_in_as wherebloc
                   "\n" ++ show (fn_ty, fn_is))
 
         ((ElabResult lhs' dlhs [] ctxt' newDecls highlights newGName, probs, inj), _) <-
-           tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patLHS") infP initEState
+           elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patLHS") infP initEState
                     (do res <- errAt "left hand side of " fname Nothing
                                  (erun (fromMaybe NoFC $ highestFC lhs_in_as)
                                        (buildTC i info ELHS opts fname
@@ -771,7 +771,7 @@ elabClause info opts (cnum, PClause fc fname lhs_in_as withs rhs_in_as wherebloc
         ctxt <- getContext -- new context with where block added
         logElab 5 "STARTING CHECK"
         ((rhsElab, defer, holes, is, probs, ctxt', newDecls, highlights, newGName), _) <-
-           tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patRHS") clhsty initEState
+           elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patRHS") clhsty initEState
                     (do pbinds ist lhs_tm
                         -- proof search can use explicitly written names
                         mapM_ addPSname (allNamesIn lhs_in)
@@ -949,7 +949,7 @@ elabClause info opts (_, PWith fc fname lhs_in withs wval_in pn_in withblock)
                     (addImplPat i lhs_in)
         logElab 2 ("LHS: " ++ show lhs)
         (ElabResult lhs' dlhs [] ctxt' newDecls highlights newGName, _) <-
-            tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patLHS") infP initEState
+            elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "patLHS") infP initEState
               (errAt "left hand side of with in " fname Nothing
                 (erun (fromMaybe NoFC $ highestFC lhs_in)
                       (buildTC i info ELHS opts fname
@@ -980,7 +980,7 @@ elabClause info opts (_, PWith fc fname lhs_in withs wval_in pn_in withblock)
         logElab 5 ("Checking " ++ showTmImpls wval)
         -- Elaborate wval in this context
         ((wvalElab, defer, is, ctxt', newDecls, highlights, newGName), _) <-
-            tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "withRHS")
+            elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "withRHS")
                         (bindTyArgs PVTy bargs infP) initEState
                         (do pbinds i lhs_tm
                             -- proof search can use explicitly written names
@@ -1097,7 +1097,7 @@ elabClause info opts (_, PWith fc fname lhs_in withs wval_in pn_in withblock)
         ctxt <- getContext -- New context with block added
         i <- getIState
         ((rhsElab, defer, is, ctxt', newDecls, highlights, newGName), _) <-
-           tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "wpatRHS") clhsty initEState
+           elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "wpatRHS") clhsty initEState
                     (do pbinds i lhs_tm
                         setNextName
                         (ElabResult _ d is ctxt' newDecls highlights newGName) <-

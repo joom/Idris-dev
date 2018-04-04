@@ -42,8 +42,8 @@ elabValBind info aspat norm tm_in
         --    * elaboration as a function a -> b
 
         (ElabResult tm' defer is ctxt' newDecls highlights newGName, _) <-
-             tclift (elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "val") infP initEState
-                     (build i info aspat [Reflection] (sMN 0 "val") (infTerm tm)))
+             elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) (sMN 0 "val") infP initEState
+                     (build i info aspat [Reflection] (sMN 0 "val") (infTerm tm))
 
         -- Extend the context with new definitions created
         setContext ctxt'

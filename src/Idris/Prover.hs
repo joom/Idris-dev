@@ -87,14 +87,15 @@ assumptionNames e
 prove :: Bool -> ElabInfo -> Ctxt OptInfo -> Context -> Bool -> Name -> Type -> Idris ()
 prove mode info opt ctxt lit n ty
     = do ps <- fmap (\ist -> initElaborator n (constraintNS info) ctxt (idris_datatypes ist) (idris_name ist) ty) getIState
+         sm <- fmap idris_sourcemap getIState
          idemodePutSExp "start-proof-mode" n
          (tm, prf) <-
             if mode
-              then elabloop info n True ("-" ++ show n) [] (initElabState ps initEState) [] Nothing []
+              then elabloop info n True ("-" ++ show n) [] (initElabState sm ps initEState) [] Nothing []
               else do iputStrLn $ "Warning: this interactive prover is deprecated and will be removed " ++
                                   "in a future release. Please see :elab for a similar feature that "++
                                   "will replace it."
-                      ploop n True ("-" ++ show n) [] (initElabState ps initEState) Nothing
+                      ploop n True ("-" ++ show n) [] (initElabState sm ps initEState) Nothing
          logLvl 1 $ "Adding " ++ show tm
          i <- getIState
          let shower = if mode

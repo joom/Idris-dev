@@ -35,6 +35,7 @@ import Idris.Termination (buildSCG, checkDeclTotality, checkPositive)
 import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.State.Strict
+import qualified Data.IntervalMap.FingerTree as I
 import Data.Foldable (for_)
 import Data.List
 import qualified Data.Map as M
@@ -290,7 +291,8 @@ elab ist info emode opts fn tm
     -- typically
     elabE :: ElabCtxt -> Maybe FC -> PTerm -> ElabD ()
     elabE ina fc' t =
-     do solved <- get_recents
+     do maybe (return ()) mapIntervalToEnv fc'
+        solved <- get_recents
         as <- get_autos
         hs <- get_holes
         -- If any of the autos use variables which have recently been solved,
@@ -2253,7 +2255,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
 
            (ctxt', es@ES{..}) <-
               do ES{..} <- get
-                 lift $ runElab aux
+                 lift $ runElab elab_sourcemap aux
                              (do runElabAction info ist fc [] script ns
                                  ctxt' <- get_context
                                  return ctxt')
@@ -2306,6 +2308,15 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
            msg' <- eval msg
            parts <- reifyReportParts msg
            debugElaborator parts
+      | n == tacN "Prim__EnvAtPos"
+      = do ~[pair] <- tacTmArgs 1 tac args
+           pair' <- eval pair
+           pt <- reifyPair reifyInt reifyInt pair'
+           ES{..} <- get
+           let envs = I.search pt (sourcemap elab_sourcemap)
+           fmap fst . checkClosed $ reflectEnv $ case envs of
+             (_:_) -> snd (last envs)
+             _ -> []
       | n == tacN "Prim__FromEditor"
       = do ~[ty, hasEditorPrim, arg] <- tacTmArgs 3 tac args
            ty' <- eval ty
@@ -2319,7 +2330,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                    -- 1) Parse the surface syntax
                    Right pterm -> do
                      ctxt <- get_context
-                     case elaborate (constraintNS toplevel) ctxt emptyContext
+                     case elaborateTC (constraintNS toplevel) ctxt emptyContext
                                  0 (sMN 0 "toRaw") Erased initEState
                                  (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
                        Error err -> lift . tfail $ err
@@ -2352,7 +2363,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
              -- toEditor with TT
              P _ tyN _ | tyN == reflm "TT" -> do
                ctxt <- get_context
-               case elaborate (constraintNS toplevel) ctxt emptyContext 0
+               case elaborateTC (constraintNS toplevel) ctxt emptyContext 0
                        (sMN 0 "evalElab") Erased initEState (reifyTT arg) of
                  Error err -> lift . tfail $ err
                  OK (v, _) -> do
@@ -2375,7 +2386,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
     handle :: Term -> (String -> ElabD Term) -> ElabD Term
     handle arg f = do
       ctxt <- get_context
-      case elaborate (constraintNS toplevel) ctxt emptyContext 0
+      case elaborateTC (constraintNS toplevel) ctxt emptyContext 0
               (sMN 0 "evalElab") Erased initEState
               (reifySExp arg >>= \case
                   StringAtom s -> f s
@@ -2842,7 +2853,7 @@ processTacticDecls info steps =
           ist <- getIState
           let lhs = addImplPat ist lhs_in
           let fc = fileFC "elab_reflected_totality"
-          case elaborate (constraintNS info) ctxt (idris_datatypes ist) (idris_name ist) (sMN 0 "refPatLHS") infP initEState
+          case elaborateTC (constraintNS info) ctxt (idris_datatypes ist) (idris_name ist) (sMN 0 "refPatLHS") infP initEState
                 (erun fc (buildTC ist info EImpossible [] fname (allNamesIn lhs_in)
                                                                 (infTerm lhs))) of
             OK (ElabResult lhs' _ _ _ _ _ name', _) ->

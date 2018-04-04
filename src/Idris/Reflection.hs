@@ -17,9 +17,9 @@ module Idris.Reflection (RConstructorDefn(..), RDataDefn(..),RFunArg(..),
                          reflectName, reflectNameType, reflectRaw,
                          reflectRawQuotePattern, reflectRawQuote, reflectTTQuote,
                          reflectTTQuotePattern, reflm, reify, reifyBool, reifyEnv,
-                         reifyFunDefn, reifyList, reifyRDataDefn, reifyRaw,
-                         reifyReportPart, reifyReportParts, reifyTT, reifyTTName,
-                         reifyTyDecl, rFunArgToPArg, tacN,
+                         reifyFunDefn, reifyInt, reifyList, reifyRDataDefn,
+                         reifyPair, reifyRaw, reifyReportPart, reifyReportParts,
+                         reifyTT, reifyTTName, reifyTyDecl, rFunArgToPArg, tacN,
                          editN, editNS, reflectSExp, reifySExp, reflectMaybe,
                          reflectEither, reifyMaybe, reifyEither, reflErrName
                          ) where
@@ -989,7 +989,7 @@ reifyReportPart (App _ (P (DCon _ _ _) n _) (Constant (Str msg))) | n == reflm "
     Right (TextPart msg)
 reifyReportPart (App _ (P (DCon _ _ _) n _) ttn)
   | n == reflm "NamePart" =
-    case runElab initEState (reifyTTName ttn) (initElaborator (sMN 0 "hole") internalNS initContext emptyContext 0 Erased) of
+    case runElab emptySourceMap initEState (reifyTTName ttn) (initElaborator (sMN 0 "hole") internalNS initContext emptyContext 0 Erased) of
       Error e -> Left . InternalMsg $
        "could not reify name term " ++
        show ttn ++
@@ -997,7 +997,7 @@ reifyReportPart (App _ (P (DCon _ _ _) n _) ttn)
       OK (n', _)-> Right $ NamePart n'
 reifyReportPart (App _ (P (DCon _ _ _) n _) tm)
   | n == reflm "TermPart" =
-  case runElab initEState (reifyTT tm) (initElaborator (sMN 0 "hole") internalNS initContext emptyContext 0 Erased) of
+  case runElab emptySourceMap initEState (reifyTT tm) (initElaborator (sMN 0 "hole") internalNS initContext emptyContext 0 Erased) of
     Error e -> Left . InternalMsg $
       "could not reify reflected term " ++
       show tm ++
@@ -1005,7 +1005,7 @@ reifyReportPart (App _ (P (DCon _ _ _) n _) tm)
     OK (tm', _) -> Right $ TermPart tm'
 reifyReportPart (App _ (P (DCon _ _ _) n _) tm)
   | n == reflm "RawPart" =
-  case runElab initEState (reifyRaw tm) (initElaborator (sMN 0 "hole") internalNS initContext emptyContext 0 Erased) of
+  case runElab emptySourceMap initEState (reifyRaw tm) (initElaborator (sMN 0 "hole") internalNS initContext emptyContext 0 Erased) of
     Error e -> Left . InternalMsg $
       "could not reify reflected raw term " ++
       show tm ++

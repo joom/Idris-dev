@@ -136,8 +136,6 @@ repl orig mods efile
                         Just mods -> let efile' = fromMaybe efile (listToMaybe mods)
                                      in repl orig mods efile'
                         Nothing -> return ()
---                             ctrlC)
---       ctrlC
    where ctrlC :: InputT Idris a -> SomeException -> InputT Idris a
          ctrlC act e = do lift $ iputStrLn (show e)
                           act -- repl orig mods

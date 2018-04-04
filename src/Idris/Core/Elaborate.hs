@@ -24,7 +24,12 @@ import Idris.Core.TT
 import Idris.Core.Typecheck
 import Idris.Core.Unify
 
+import {-# SOURCE #-} Idris.AbsSyntaxTree
+import {-# SOURCE #-} Idris.Error
+import {-# SOURCE #-} Idris.Output
+
 import Control.Monad.State.Strict
+import qualified Data.IntervalMap.FingerTree as I
 import Data.List
 
 data ElabState aux = ES {
@@ -35,8 +40,8 @@ data ElabState aux = ES {
   , elab_sourcemap :: SourceMap
   } deriving Show
 
-initElabState :: ProofState -> aux -> ElabState aux
-initElabState ps a = ES ps a "" Nothing emptySourceMap
+initElabState :: SourceMap -> ProofState -> aux -> ElabState aux
+initElabState sm ps a = ES ps a "" Nothing sm
 
 type Elab' aux a = StateT (ElabState aux) TC a
 type Elab a = Elab' () a
@@ -76,6 +81,19 @@ loadState = do ES{..} <- get
                case load_slot of
                   Just st -> put st
                   _ -> lift $ Error . Msg $ "Nothing to undo"
+
+mapIntervalToEnv :: FC -> Elab' aux ()
+mapIntervalToEnv fc =
+  case fc_interval fc of
+    Nothing -> return ()
+    Just interval ->
+      do es@ES{..} <- get
+         env <- get_env
+         if null env
+           then return ()
+           else do
+             let add = SourceMap (I.insert interval env (sourcemap elab_sourcemap))
+             put $ es {elab_sourcemap = add}
 
 getNameFrom :: Name -> Elab' aux Name
 getNameFrom n = do es@(ES{..}) <- get
@@ -141,11 +159,11 @@ erun :: FC -> Elab' aux a -> Elab' aux a
 erun f e = do (x, _) <- erunAux f e
               return x
 
-runElab :: aux -> Elab' aux a -> ProofState -> TC (a, ElabState aux)
-runElab a e ps = runStateT e (initElabState ps a)
+runElab :: SourceMap -> aux -> Elab' aux a -> ProofState -> TC (a, ElabState aux)
+runElab sm a e ps = runStateT e (initElabState sm ps a)
 
-execElab :: aux -> Elab' aux a -> ProofState -> TC (ElabState aux)
-execElab a e ps = execStateT e (initElabState ps a)
+execElab :: SourceMap -> aux -> Elab' aux a -> ProofState -> TC (ElabState aux)
+execElab sm a e ps = execStateT e (initElabState sm ps a)
 
 initElaborator :: Name -- ^ the name of what's to be elaborated
                -> String -- ^ the current source file
@@ -156,10 +174,18 @@ initElaborator :: Name -- ^ the name of what's to be elaborated
                -> ProofState
 initElaborator = newProof
 
-elaborate :: String -> Context -> Ctxt TypeInfo -> Int -> Name -> Type -> aux -> Elab' aux a -> TC (a, String)
+elaborate :: String -> Context -> Ctxt TypeInfo -> Int -> Name -> Type -> aux -> Elab' aux a -> Idris (a, String)
 elaborate tcns ctxt datatypes globalNames n ty d elab =
   do let ps = initElaborator n tcns ctxt datatypes globalNames ty
-     (a, ES{..}) <- runElab d elab ps
+     sm <- idris_sourcemap <$> get
+     (a, ES{..}) <- tclift $ runElab sm d elab ps
+     updateSourceMap elab_sourcemap
+     return $! (a, elab_log)
+
+elaborateTC :: String -> Context -> Ctxt TypeInfo -> Int -> Name -> Type -> aux -> Elab' aux a -> TC (a, String)
+elaborateTC tcns ctxt datatypes globalNames n ty d elab =
+  do let ps = initElaborator n tcns ctxt datatypes globalNames ty
+     (a, ES{..}) <- runElab emptySourceMap d elab ps
      return $! (a, elab_log)
 
 -- | Modify the auxiliary state

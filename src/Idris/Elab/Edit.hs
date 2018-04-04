@@ -83,7 +83,7 @@ elabEditAt fn nameStr l args =
          -- Elaborate `pterm` into TT for interface resolution
          (tm, _) <- elabVal toplevel ERHS pterm
          let tm' = normalise ctxt [] tm
-         (tm'', _) <- tclift $ elaborate "(toplevel)" ctxt
+         (tm'', _) <- elaborate "(toplevel)" ctxt
             (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
             Erased initEState
             (runElabAction toplevel ist NoFC [] tm' [])
@@ -93,7 +93,7 @@ elabEditAt fn nameStr l args =
      (app, _) <- tclift $ check ctxt [] (raw_apply (Var ns) rawArgs)
      -- 6) run the tactic
      lastTyInElab <- tyInElab (last collected)
-     (res, _) <- tclift $ elaborate "(toplevel)" ctxt
+     (res, _) <- tclift $ elaborateTC "(toplevel)" ctxt
                    (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
                    lastTyInElab initEState
                    (runElabAction toplevel ist NoFC [] app [])
@@ -104,7 +104,7 @@ elabEditAt fn nameStr l args =
      (tm, _) <- elabVal toplevel ERHS pterm
      let tm' = normalise ctxt [] tm
      -- reify the SExp TT term into a Haskell SExp
-     (resSExp, _) <- tclift $ elaborate "(toplevel)" ctxt
+     (resSExp, _) <- tclift $ elaborateTC "(toplevel)" ctxt
        (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
        Erased initEState
        (runElabAction toplevel ist NoFC [] tm' [] >>= reifySExp)

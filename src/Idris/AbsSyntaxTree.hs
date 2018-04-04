@@ -433,6 +433,10 @@ catchError = liftCatch catchE
 throwError :: Err -> Idris a
 throwError = Trans.lift . throwE
 
+-- | Here instead of Idris.AbsSyntax because of recursive modules
+updateSourceMap :: SourceMap -> Idris ()
+updateSourceMap m = do ist <- get ; put $ ist {idris_sourcemap = m}
+
 -- Commands in the REPL
 
 

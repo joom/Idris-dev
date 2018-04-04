@@ -54,7 +54,7 @@ buildType info syn fc opts n ty' = do
          logElab 2 $ show n ++ " type " ++ show (using syn) ++ "\n" ++ showTmImpls ty
 
          ((ElabResult tyT' defer is ctxt' newDecls highlights newGName, est), log) <-
-            tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) n (TType (UVal 0)) initEState
+            elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) n (TType (UVal 0)) initEState
                      (errAt "type of " n Nothing
                         (erunAux fc (build i info ETyDecl [] n ty)))
 
@@ -219,7 +219,7 @@ elabType' norm info syn doc argDocs fc opts n nfc ty' = {- let ty' = piBind (par
              let tyP = delab i ty
              let pterm = PApp NoFC (PRef NoFC [] (editN "fromEditor"))
                               [PImp 1 True [] (sUN "a") tyP]
-             case elaborate (constraintNS info) ctxt
+             case elaborateTC (constraintNS info) ctxt
                     (idris_datatypes i) (idris_name i) (sMN 0 "val")
                     infP initEState (build i info ERHS [Reflection]
                     (sMN 0 "val") (infTerm (addImpl [] i pterm))) of

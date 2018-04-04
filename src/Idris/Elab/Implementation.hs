@@ -229,7 +229,7 @@ elabImplementation info syn doc argDocs what fc cs parents acc opts n nfc ps pex
              let ty = addImpl [] i ty'
              ctxt <- getContext
              (ElabResult tyT _ _ ctxt' newDecls highlights newGName, _) <-
-                tclift $ elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) iname (TType (UVal 0)) initEState
+                elaborate (constraintNS info) ctxt (idris_datatypes i) (idris_name i) iname (TType (UVal 0)) initEState
                          (errAt "type of " iname Nothing (erun fc (build i info ERHS [] iname ty)))
              setContext ctxt'
              processTacticDecls info newDecls

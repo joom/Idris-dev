@@ -30,7 +30,7 @@ import Idris.Elab.Type
 import Idris.Elab.Value
 import Idris.Error
 import Idris.Options
-import Idris.Output (sendHighlighting)
+import Idris.Output
 import Idris.Primitives
 import Idris.Termination
 import IRTS.Lang

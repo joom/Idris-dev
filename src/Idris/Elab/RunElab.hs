@@ -35,7 +35,7 @@ elabRunElab info fc script' ns =
      ist <- getIState
      ctxt <- getContext
      (ElabResult tyT' defer is ctxt' newDecls highlights newGName, log) <-
-        tclift $ elaborate (constraintNS info) ctxt (idris_datatypes ist) (idris_name ist) (sMN 0 "toplLevelElab") elabScriptTy initEState
+        elaborate (constraintNS info) ctxt (idris_datatypes ist) (idris_name ist) (sMN 0 "toplLevelElab") elabScriptTy initEState
                  (transformErr RunningElabScript
                    (erun fc (do tm <- runElabAction info ist fc [] script ns
                                 EState is _ impls highlights _ _ <- getAux

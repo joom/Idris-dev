@@ -83,6 +83,10 @@ implementation Editorable TTName where
       stringify (MN i x) = pure ("__" ++ x ++ show i)
       stringify n'@(SN sn) = fail [TextPart "Don't know how to make", NamePart n', TextPart "into", NamePart `{StringAtom}]
 
+implementation Editorable SExp where
+  fromEditor x = pure x
+  toEditor x = pure x
+
 implementation Editorable Unit where
   fromEditor (SExpList []) = pure ()
   fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Unit")]

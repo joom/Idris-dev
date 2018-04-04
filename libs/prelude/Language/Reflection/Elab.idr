@@ -215,6 +215,7 @@ data Elab : Type -> Type where
   -- Editorable primitives
   Prim__FromEditor : {a : Type} -> HasEditorPrim a -> SExp -> Elab a
   Prim__ToEditor : {a : Type} -> HasEditorPrim a -> a -> Elab SExp
+  Prim__EnvAtPos : (Int, Int) -> Elab (List (TTName, Binder TT))
 
 -------------
 -- Public API
@@ -673,6 +674,11 @@ namespace Tactics
   export
   prim__toEditor : {auto has : HasEditorPrim a} -> a -> Elab SExp
   prim__toEditor {has = x} y = Prim__ToEditor x y
+
+  ||| Look up the lexical binding at a position in the file.
+  export
+  getEnvAtPos : (Int, Int) -> Elab (List (TTName, Binder TT))
+  getEnvAtPos = Prim__EnvAtPos
 
 ---------------------------
 -- Quotable Implementations
