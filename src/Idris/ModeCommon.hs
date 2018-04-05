@@ -76,10 +76,12 @@ loadInputs inputs toline -- furthest line to read in input source files
                       ninputs
            inew <- getIState
            let tidata = idris_tyinfodata inew
+           let sm = idris_sourcemap inew
            -- If it worked, load the whole thing from all the ibcs together
            case errSpan inew of
               Nothing ->
-                do putIState $!! ist { idris_tyinfodata = tidata }
+                do putIState $!! ist { idris_tyinfodata = tidata
+                                     , idris_sourcemap = sm }
                    logParser 3 $ "loadInputs ifiles" ++ show ifiles
 
                    let fileToIFileType :: FilePath -> Idris IFileType
@@ -130,6 +132,7 @@ loadInputs inputs toline -- furthest line to read in input source files
                                             _ -> Nothing
                       loadFromIFile True phase f maxline
                       inew <- getIState
+                      logParser 3 $ "tryLoad sourcemap: " ++ show (sourcemap (idris_sourcemap inew))
                       -- FIXME: Save these in IBC to avoid this hack! Need to
                       -- preserve it all from source inputs
                       --
@@ -145,7 +148,8 @@ loadInputs inputs toline -- furthest line to read in input source files
                             do when (not keepstate) $ putIState $!! ist
                                ist <- getIState
                                putIState $!! ist { idris_tyinfodata = tidata,
-                                                   idris_patdefs = patdefs }
+                                                   idris_patdefs = patdefs,
+                                                   idris_sourcemap = idris_sourcemap inew }
                                tryLoad keepstate phase fs
                           else warnTotality
 

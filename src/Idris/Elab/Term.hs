@@ -2330,9 +2330,11 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                    -- 1) Parse the surface syntax
                    Right pterm -> do
                      ctxt <- get_context
+                     ES{..} <- get
+                     let ist = idrisInit {idris_sourcemap = elab_sourcemap}
                      case elaborateTC (constraintNS toplevel) ctxt emptyContext
                                  0 (sMN 0 "toRaw") Erased initEState
-                                 (build idrisInit toplevel ERHS [] (sMN 0 "val") pterm) of
+                                 (build ist toplevel ERHS [] (sMN 0 "val") pterm) of
                        Error err -> lift . tfail $ err
                        -- 2) Elaborate that into the core language
                        OK (result, _) -> do

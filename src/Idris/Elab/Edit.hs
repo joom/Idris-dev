@@ -9,11 +9,11 @@ module Idris.Elab.Edit where
 
 import Control.Monad
 import Data.List.Split
+import qualified Data.IntervalMap.FingerTree as I
 import System.IO
 
 import Idris.AbsSyntax
 import Idris.Delaborate
-import Idris.Core.Evaluate
 import Idris.Core.Elaborate
 import Idris.Core.TT
 import Idris.Core.Typecheck
@@ -49,10 +49,10 @@ collectTypes t = return [t]
 elabEditAt
   :: FilePath -- ^ The file name in which the Elab action is run
   -> String -- ^ The name of the action
-  -> Int -- ^ The line number the action is run on
+  -> (Int, Int) -- ^ The line and column number the action is run on
   -> [SExp] -- ^ The arguments to the action
   -> Idris ()
-elabEditAt fn nameStr l args =
+elabEditAt fn nameStr pos args =
   do ctxt <- getContext
      ist <- getIState
      name <- namify nameStr
@@ -75,19 +75,26 @@ elabEditAt fn nameStr l args =
             ++ " arguments but only " ++ show countArgs ++ " are given"
      -- 4) call fromEditor for each of the SExps and get Terms
      --   * reflect Haskell SExps to Idris SExp ASTs
+     --   * look up the environment at the given line and column number
+     let env = case I.search pos (sourcemap (idris_sourcemap ist)) of
+                 xs@(_:_) -> snd (last xs)
+                 _ -> []
+     iputStrLn $ "env: " ++ show env
      rawArgs <- forM (zip collected args) $ \(argTy, sexp) -> do
          sexpPTerm <- tclift $ (delab ist . fst) <$> check ctxt [] (reflectSExp sexp)
          let pterm = PApp NoFC (PRef NoFC [] (editN "fromEditor"))
                                [ PImp 1 True [] (sUN "a") (delab ist argTy)
                                , PExp 1 [] (sMN 0 "arg") sexpPTerm ]
+         logElab 3 $ "before elabVal: " ++ show pterm
          -- Elaborate `pterm` into TT for interface resolution
          (tm, _) <- elabVal toplevel ERHS pterm
-         let tm' = normalise ctxt [] tm
-         (tm'', _) <- elaborate "(toplevel)" ctxt
+         logElab 3 $ "after elabVal: " ++ show tm
+         (tm', _) <- elaborate "(toplevel)" ctxt
             (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
             Erased initEState
-            (runElabAction toplevel ist NoFC [] tm' [])
-         return $ forget tm''
+            (runElabAction toplevel ist NoFC env tm [])
+         logElab 3 $ "after runElabAction1: " ++ show tm'
+         return $ forget tm'
      -- 5) build up a Term which is a function application
      --    of the original tactic and all the functions
      (app, _) <- tclift $ check ctxt [] (raw_apply (Var ns) rawArgs)
@@ -97,17 +104,17 @@ elabEditAt fn nameStr l args =
                    (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
                    lastTyInElab initEState
                    (runElabAction toplevel ist NoFC [] app [])
+     iputStrLn $ "after runElabAction2: " ++ show res
      -- 7) call toEditor on the result
      let pterm = PApp NoFC (PRef NoFC [] (editN "toEditor"))
                                [ PImp 1 True [] (sUN "a") (delab ist lastTyInElab)
                                , PExp 1 [] (sMN 0 "arg") (delab ist res) ]
      (tm, _) <- elabVal toplevel ERHS pterm
-     let tm' = normalise ctxt [] tm
      -- reify the SExp TT term into a Haskell SExp
      (resSExp, _) <- tclift $ elaborateTC "(toplevel)" ctxt
        (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
        Erased initEState
-       (runElabAction toplevel ist NoFC [] tm' [] >>= reifySExp)
+       (runElabAction toplevel ist NoFC [] tm [] >>= reifySExp)
      -- send it back to the editor
      case idris_outputmode ist of
        RawOutput _ -> fail "Not in IDE mode"

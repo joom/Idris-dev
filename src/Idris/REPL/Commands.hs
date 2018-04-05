@@ -46,7 +46,7 @@ data Command = Quit
              | ListDynamic
              | Pattelab PTerm
              | Search [PkgName] PTerm
-             | ElabEditAt String [SExp] Int
+             | ElabEditAt String [SExp] (Int, Int)
              | CaseSplitAt Bool Int Name
              | AddClauseFrom Bool Int Name
              | AddProofClauseFrom Bool Int Name
