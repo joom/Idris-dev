@@ -15,6 +15,7 @@ import System.IO
 import Idris.AbsSyntax
 import Idris.Delaborate
 import Idris.Core.Elaborate
+import Idris.Core.Evaluate
 import Idris.Core.TT
 import Idris.Core.Typecheck
 import Idris.Elab.Term
@@ -79,21 +80,23 @@ elabEditAt fn nameStr pos args =
      let env = case I.search pos (sourcemap (idris_sourcemap ist)) of
                  xs@(_:_) -> snd (last xs)
                  _ -> []
-     iputStrLn $ "env: " ++ show env
+     logElab 3 $ "Under environment: " ++ show env
+     -- Since there is no way to pass an environment to elaboration,
+     -- create a fake context by extending ctxt with things in the env
+     let ctxt' = foldr (\(n,_,b) -> addToCtxt n Erased (binderTy b)) ctxt env
      rawArgs <- forM (zip collected args) $ \(argTy, sexp) -> do
          sexpPTerm <- tclift $ (delab ist . fst) <$> check ctxt [] (reflectSExp sexp)
          let pterm = PApp NoFC (PRef NoFC [] (editN "fromEditor"))
                                [ PImp 1 True [] (sUN "a") (delab ist argTy)
                                , PExp 1 [] (sMN 0 "arg") sexpPTerm ]
-         logElab 3 $ "before elabVal: " ++ show pterm
          -- Elaborate `pterm` into TT for interface resolution
          (tm, _) <- elabVal toplevel ERHS pterm
-         logElab 3 $ "after elabVal: " ++ show tm
-         (tm', _) <- elaborate "(toplevel)" ctxt
+         logElab 3 $ "After elaboration of fromEditor call: " ++ show tm
+         (tm', _) <- elaborate "(toplevel)" ctxt'
             (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
             Erased initEState
-            (runElabAction toplevel ist NoFC env tm [])
-         logElab 3 $ "after runElabAction1: " ++ show tm'
+            (runElabAction toplevel ist NoFC [] tm [])
+         logElab 3 $ "After tactic elaboration: " ++ show tm'
          return $ forget tm'
      -- 5) build up a Term which is a function application
      --    of the original tactic and all the functions
@@ -103,8 +106,10 @@ elabEditAt fn nameStr pos args =
      (res, _) <- tclift $ elaborateTC "(toplevel)" ctxt
                    (idris_datatypes ist) (idris_name ist) (sMN 0 "editElab")
                    lastTyInElab initEState
-                   (runElabAction toplevel ist NoFC [] app [])
-     iputStrLn $ "after runElabAction2: " ++ show res
+                   (do forM_ env $ \(n, r, b) ->
+                         -- TODO: these are not all let bindings
+                         letbind n r (forget (binderTy b)) (RConstant Forgot)
+                       runElabAction toplevel ist NoFC [] app [])
      -- 7) call toEditor on the result
      let pterm = PApp NoFC (PRef NoFC [] (editN "toEditor"))
                                [ PImp 1 True [] (sUN "a") (delab ist lastTyInElab)

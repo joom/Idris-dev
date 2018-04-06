@@ -2325,16 +2325,15 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
              -- fromEditor with TT
              P _ tyN _ | tyN == reflm "TT" ->
                handle arg' $ \s -> do
-                 case parseExpr idrisInit s of
+                 case parseExpr ist s of
                    Left err -> lift . tfail . Msg . prettyError $ err
                    -- 1) Parse the surface syntax
                    Right pterm -> do
                      ctxt <- get_context
                      ES{..} <- get
-                     let ist = idrisInit {idris_sourcemap = elab_sourcemap}
-                     case elaborateTC (constraintNS toplevel) ctxt emptyContext
-                                 0 (sMN 0 "toRaw") Erased initEState
-                                 (build ist toplevel ERHS [] (sMN 0 "val") pterm) of
+                     case elaborateTC (constraintNS info) ctxt (idris_datatypes ist)
+                                 (idris_name ist) (sMN 0 "toRaw") Erased initEState
+                                 (build ist info ERHS [] (sMN 0 "val") pterm) of
                        Error err -> lift . tfail $ err
                        -- 2) Elaborate that into the core language
                        OK (result, _) -> do
@@ -2349,7 +2348,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
              -- fromEditor with TyDecl
              P _ tyN _ | tyN == tacN "TyDecl" ->
                handle arg' $ \s -> do
-                 case parseFnDecl idrisInit s of
+                 case parseFnDecl ist s of
                    Left err -> lift . tfail . Msg . prettyError $ err
                    -- 1) Parse the surface syntax
                    Right pdecl@(PTy _ _ _ _ opts n _ tyInPterm) -> do
@@ -2365,11 +2364,12 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
              -- toEditor with TT
              P _ tyN _ | tyN == reflm "TT" -> do
                ctxt <- get_context
-               case elaborateTC (constraintNS toplevel) ctxt emptyContext 0
-                       (sMN 0 "evalElab") Erased initEState (reifyTT arg) of
+               case elaborateTC (constraintNS info) ctxt (idris_datatypes ist)
+                     (idris_name ist) (sMN 0 "evalElab") Erased
+                     initEState (reifyTT arg) of
                  Error err -> lift . tfail $ err
                  OK (v, _) -> do
-                   let pterm = delabSugared idrisInit v
+                   let pterm = delabSugared ist v
                    let s = printPTerm pterm
                    case check ctxt [] (reflectSExp (StringAtom s)) of
                      Error err -> lift . tfail $ err
