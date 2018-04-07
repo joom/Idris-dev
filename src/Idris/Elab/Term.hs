@@ -37,6 +37,7 @@ import Control.Monad
 import Control.Monad.State.Strict
 import qualified Data.IntervalMap.FingerTree as I
 import Data.Foldable (for_)
+import Data.Generics.Uniplate.Data (transform)
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
@@ -2332,8 +2333,8 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                      ctxt <- get_context
                      ES{..} <- get
                      case elaborateTC (constraintNS info) ctxt (idris_datatypes ist)
-                                 (idris_name ist) (sMN 0 "toRaw") Erased initEState
-                                 (build ist info ERHS [] (sMN 0 "val") pterm) of
+                            (idris_name ist) (sMN 0 "toRaw") Erased initEState
+                            (build ist info ERHS [] (sMN 0 "val") (resolveNames ctxt pterm)) of
                        Error err -> lift . tfail $ err
                        -- 2) Elaborate that into the core language
                        OK (result, _) -> do
@@ -2395,6 +2396,13 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                   _ -> lift . tfail . Msg $ "Not a StringAtom") of
         Error err -> lift . tfail $ err
         OK (v, _) -> return v
+
+    resolveNames :: Context -> PTerm -> PTerm
+    resolveNames ctxt = transform resolveRef
+      where
+        resolveRef (PRef fc fcs n)
+          | (n':_) <- lookupNames n ctxt = PRef fc fcs n'
+        resolveRef t = t
 
 -- Running tactics directly
 -- if a tactic adds unification problems, return an error
