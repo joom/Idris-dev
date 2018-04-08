@@ -37,7 +37,7 @@ import Control.Monad
 import Control.Monad.State.Strict
 import qualified Data.IntervalMap.FingerTree as I
 import Data.Foldable (for_)
-import Data.Generics.Uniplate.Data (transform)
+import Data.Generics.Uniplate.Data (transformM)
 import Data.List
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, mapMaybe, maybeToList)
@@ -2332,20 +2332,23 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                    Right pterm -> do
                      ctxt <- get_context
                      ES{..} <- get
-                     case elaborateTC (constraintNS info) ctxt (idris_datatypes ist)
-                            (idris_name ist) (sMN 0 "toRaw") Erased initEState
-                            (build ist info ERHS [] (sMN 0 "val") (resolveNames ctxt pterm)) of
-                       Error err -> lift . tfail $ err
-                       -- 2) Elaborate that into the core language
-                       OK (result, _) -> do
-                         let tm = resultTerm result
-                         -- 3) Reflect that to Raw in the core language and add Just
-                         let reflected = reflect tm
-                         -- 4) Typecheck the reflected term from Raw to TT
-                         case check ctxt [] reflected of
-                           Error err -> lift . tfail $ err
-                           -- 5) Evaluate and return the TT
-                           OK (tmReflected, _) -> eval tmReflected
+                     case resolveNames ctxt pterm of
+                       Left err -> lift . tfail $ err
+                       Right pterm' ->
+                        case elaborateTC (constraintNS info) ctxt (idris_datatypes ist)
+                                (idris_name ist) (sMN 0 "toRaw") Erased initEState
+                                (build ist info ERHS [] (sMN 0 "val") pterm') of
+                          Error err -> lift . tfail $ err
+                          -- 2) Elaborate that into the core language
+                          OK (result, _) -> do
+                            let tm = resultTerm result
+                            -- 3) Reflect that to Raw in the core language and add Just
+                            let reflected = reflect tm
+                            -- 4) Typecheck the reflected term from Raw to TT
+                            case check ctxt [] reflected of
+                              Error err -> lift . tfail $ err
+                              -- 5) Evaluate and return the TT
+                              OK (tmReflected, _) -> eval tmReflected
              -- fromEditor with TyDecl
              P _ tyN _ | tyN == tacN "TyDecl" ->
                handle arg' $ \s -> do
@@ -2397,12 +2400,14 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
         Error err -> lift . tfail $ err
         OK (v, _) -> return v
 
-    resolveNames :: Context -> PTerm -> PTerm
-    resolveNames ctxt = transform resolveRef
+    resolveNames :: Context -> PTerm -> Either Err PTerm
+    resolveNames ctxt = transformM resolveRef
       where
         resolveRef (PRef fc fcs n)
-          | (n':_) <- lookupNames n ctxt = PRef fc fcs n'
-        resolveRef t = t
+          | (n':[]) <- lookupNames n ctxt = return (PRef fc fcs n')
+        resolveRef (PRef fc fcs n)
+          | ns@(_:_) <- lookupNames n ctxt = Left (CantResolveAlts ns)
+        resolveRef t = return t
 
 -- Running tactics directly
 -- if a tactic adds unification problems, return an error
