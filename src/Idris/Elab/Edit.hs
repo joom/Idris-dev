@@ -41,10 +41,9 @@ tyInElab x = fail $ "The term " ++ show x ++ " is not an Elab type"
 -- | Collect the non-arrow types in a given type.
 -- If the input is the syntax tree for @Bool -> Nat@, then the result should
 -- be a list of the syntax trees for @Bool@ and @Nat@.
-collectTypes :: Monad m => Type -> m [Type]
-collectTypes (Bind _ (Pi _ _ t1 _) t2) = (t1 :) <$> collectTypes t2
-collectTypes (Proj t _) = fail "Don't know how to collect Proj"
-collectTypes t = return [t]
+collectTypes :: Type -> [Type]
+collectTypes (Bind _ (Pi _ _ t1 _) t2) = t1 : collectTypes t2
+collectTypes t = [t]
 
 -- | Where all the action happens.
 elabEditAt
@@ -69,7 +68,7 @@ elabEditAt fn nameStr pos args =
                       fail "The action is not declared %editor"
      -- 3) check if the number of arguments in the type match with the given arguments
      -- note that `collected` also includes the output type
-     collected <- collectTypes ty
+     let collected = collectTypes ty
      let (countArgs, countCollected) = (length args, length collected - 1)
      unless (countArgs == countCollected) $
        fail $ "Editor action has " ++ show countCollected

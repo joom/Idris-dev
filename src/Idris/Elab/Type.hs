@@ -210,7 +210,7 @@ elabType' norm info syn doc argDocs fc opts n nfc ty' = {- let ty' = piBind (par
          -- If the function is declared as an editor action, then check if all
          -- components of the type are Editorable
          when (EditorAction `elem` opts) $ do
-           collected <- collectTypes nty'
+           let collected = collectTypes nty'
            lastTyInElab <- tyInElab (last collected)
            let toCheck = init collected ++ [lastTyInElab]
            forM_ toCheck $ \ty -> do

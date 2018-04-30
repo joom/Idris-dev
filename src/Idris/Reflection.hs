@@ -1273,11 +1273,11 @@ reifyEither (App _ (App _ (App _ (P _ n _) _) _) x)
 reifyEither _ = fail "Not Left or Right"
 
 reflectSExp :: SExp -> Raw
-reflectSExp (StringAtom s)  = RApp (Var $ tacN "StringAtom")  $ RConstant (Str s)
-reflectSExp (SymbolAtom s)  = RApp (Var $ tacN "SymbolAtom")  $ RConstant (Str s)
-reflectSExp (BoolAtom b)    = RApp (Var $ tacN "BoolAtom")    $ reflectBool b
-reflectSExp (IntegerAtom i) = RApp (Var $ tacN "IntegerAtom") $ RConstant (BI i)
-reflectSExp (SexpList l)    = RApp (Var $ tacN "SExpList") $ reflectList (Var $ tacN "SExp") (map reflectSExp l)
+reflectSExp (StringAtom s)  = RApp (Var (tacN "StringAtom"))  (RConstant (Str s))
+reflectSExp (SymbolAtom s)  = RApp (Var (tacN "SymbolAtom"))  (RConstant (Str s))
+reflectSExp (BoolAtom b)    = RApp (Var (tacN "BoolAtom"))    (reflectBool b)
+reflectSExp (IntegerAtom i) = RApp (Var (tacN "IntegerAtom")) (RConstant (BI i))
+reflectSExp (SexpList l)    = RApp (Var (tacN "SExpList"))    (reflectList (Var (tacN "SExp")) (map reflectSExp l))
 
 reifySExp :: Term -> ElabD SExp
 reifySExp (App _ (P _ n _) x)

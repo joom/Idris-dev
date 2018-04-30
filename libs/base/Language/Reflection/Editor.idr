@@ -68,20 +68,31 @@ implementation Editorable (FunClause TT) where
 
 implementation Editorable TTName where
   fromEditor (StringAtom s) = namify s
-    where namify s = case reverse (map pack (splitOn '.' (unpack s))) of
-                        [] => fail [TextPart "Empty string can't be a TTName"]
-                        [x] => pure (UN x)
-                        (x :: xs) => pure (NS (UN x) xs)
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a TTName")]
+    where
+      namify : String -> Elab TTName
+      namify s =
+        case reverse (map pack (splitOn '.' (unpack s))) of
+          [] => fail [TextPart "Empty string can't be a TTName"]
+          [x] => pure (UN x)
+          (x :: xs) => pure (NS (UN x) xs)
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{TTName} ]
 
   toEditor n = StringAtom <$> stringify n
     where
+      stringify : TTName -> Elab String
       stringify (UN x) = pure x
       stringify (NS x []) = stringify x
       stringify (NS x xs) =
         pure $ concat (intersperse "." (reverse ("" :: xs))) ++ !(stringify x)
       stringify (MN i x) = pure ("__" ++ x ++ show i)
-      stringify n'@(SN sn) = fail [TextPart "Don't know how to make", NamePart n', TextPart "into", NamePart `{StringAtom}]
+      stringify n'@(SN sn) =
+        fail [ TextPart "Don't know how to make"
+             , NamePart n', TextPart "into"
+             , NamePart `{StringAtom}]
 
 implementation Editorable SExp where
   fromEditor x = pure x
@@ -89,72 +100,123 @@ implementation Editorable SExp where
 
 implementation Editorable Unit where
   fromEditor (SExpList []) = pure ()
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Unit")]
+  fromEditor x = fail [ TextPart "Can't parse the"
+                      , NamePart `{SExp}
+                      , TextPart (show x ++ "as a")
+                      , NamePart `{Unit} ]
   toEditor () = pure (SExpList [])
 
 implementation Editorable Void where
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Void")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{Void} ]
   toEditor _ impossible
 
 implementation Editorable String where
   fromEditor (StringAtom s) = pure s
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a String")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{{String}} ]
   toEditor = pure . StringAtom
 
 implementation Editorable Char where
   fromEditor (StringAtom s) = case unpack s of
                                    [c] => pure c
                                    _ => fail [TextPart "More than one character"]
-  fromEditor _ = fail [TextPart "Can't parse SExp for Char"]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{{Char}} ]
   toEditor c = pure (StringAtom (pack [c]))
 
 implementation Editorable Integer where
   fromEditor (IntegerAtom n) = pure n
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as an Integer")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as an")
+         , NamePart `{{Integer}} ]
   toEditor = pure . IntegerAtom
 
 implementation Editorable Int where
   fromEditor (IntegerAtom n) = pure (fromInteger n)
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as an Int")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as an")
+         , NamePart `{{Int}} ]
   toEditor = pure . IntegerAtom . cast
 
 implementation Editorable Nat where
   fromEditor (IntegerAtom n) = pure (fromInteger n)
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Nat")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{Nat} ]
   toEditor = pure . IntegerAtom . cast
 
 implementation Editorable Bool where
   fromEditor (BoolAtom b) = pure b
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Bool")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{Bool} ]
   toEditor = pure . BoolAtom
 
 implementation Editorable a => Editorable (List a) where
-  fromEditor (SExpList xs) = sequence (map fromEditor xs)
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a List")]
-  toEditor xs = SExpList <$> sequence (map toEditor xs)
+  fromEditor (SExpList xs) = traverse fromEditor xs
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{List} ]
+  toEditor xs = SExpList <$> traverse toEditor xs
 
 implementation Editorable a => Editorable (Maybe a) where
   fromEditor (SExpList [SymbolAtom "Nothing"]) = pure Nothing
   fromEditor (SExpList [SymbolAtom "Just", x]) = Just <$> fromEditor x
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Maybe")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{Maybe} ]
   toEditor (Just x) = pure $ SExpList [SymbolAtom "Just", !(toEditor x)]
   toEditor Nothing = pure $ SExpList [SymbolAtom "Nothing"]
 
 implementation (Editorable a, Editorable b) => Editorable (Either a b) where
   fromEditor (SExpList [SymbolAtom "Left", x]) = Left <$> fromEditor x
   fromEditor (SExpList [SymbolAtom "Right", y]) = Right <$> fromEditor y
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as an Either")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as an")
+         , NamePart `{Either} ]
   toEditor (Left x) = pure $ SExpList [SymbolAtom "Left", !(toEditor x)]
   toEditor (Right y) = pure $ SExpList [SymbolAtom "Right", !(toEditor y)]
 
 implementation (Editorable a, Editorable b) => Editorable (a, b) where
   fromEditor (SExpList [x, y]) = MkPair <$> fromEditor x <*> fromEditor y
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a Pair")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{Pair} ]
   toEditor (x, y) = pure $ SExpList [!(toEditor x), !(toEditor y)]
 
 implementation Editorable SourceLocation where
   fromEditor (SExpList [SymbolAtom "FileLoc", x, y, z]) =
     FileLoc <$> fromEditor x <*> fromEditor y <*> fromEditor z
-  fromEditor x = fail [TextPart ("Can't parse the SExp " ++ show x ++ " as a SourceLocation")]
+  fromEditor x =
+    fail [ TextPart "Can't parse the"
+         , NamePart `{SExp}
+         , TextPart (show x ++ "as a")
+         , NamePart `{SourceLocation} ]
   toEditor (FileLoc x y z) =
     pure $ SExpList [SymbolAtom "FileLoc", !(toEditor x), !(toEditor y), !(toEditor z)]

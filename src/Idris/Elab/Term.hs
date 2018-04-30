@@ -2342,7 +2342,7 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
                           -- 2) Elaborate that into the core language
                           OK (result, _) -> do
                             let tm = resultTerm result
-                            -- 3) Reflect that to Raw in the core language and add Just
+                            -- 3) Reflect that to Raw in the core language
                             let reflected = reflect tm
                             -- 4) Typecheck the reflected term from Raw to TT
                             case check ctxt [] reflected of
@@ -2392,8 +2392,8 @@ runElabAction info ist fc env tm ns = do tm' <- eval tm
     handle :: Term -> (String -> ElabD Term) -> ElabD Term
     handle arg f = do
       ctxt <- get_context
-      case elaborateTC (constraintNS toplevel) ctxt emptyContext 0
-              (sMN 0 "evalElab") Erased initEState
+      case elaborateTC (constraintNS info) ctxt (idris_datatypes ist)
+              (idris_name ist) (sMN 0 "evalElab") Erased initEState
               (reifySExp arg >>= \case
                   StringAtom s -> f s
                   _ -> lift . tfail . Msg $ "Not a StringAtom") of

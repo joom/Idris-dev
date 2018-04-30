@@ -1062,7 +1062,7 @@ lookupTy n ctxt = map snd (lookupTyName n ctxt)
 lookupTyExact :: Name -> Context -> Maybe Type
 lookupTyExact n ctxt = fmap snd (lookupTyNameExact n ctxt)
 
--- | Return true if the given type is a concrete type familyor primitive
+-- | Return true if the given type is a concrete type family or primitive
 -- False it it's a function to compute a type or a variable
 isCanonical :: Type -> Context -> Bool
 isCanonical t ctxt
