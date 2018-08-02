@@ -16,6 +16,8 @@ import Control.Applicative ((<$>), (<*>))
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
+import qualified Data.FingerTree
+import qualified Data.IntervalMap.FingerTree
 
 instance Binary ErrorReportPart
 instance Binary Provenance
@@ -366,3 +368,12 @@ instance Binary (TT Name) where
                    10 -> do x1 <- get
                             return (UType x1)
                    _ -> error "Corrupted binary data for TT"
+
+instance Binary a => Binary (Data.FingerTree.Digit a)
+instance (Binary a, Binary b) => Binary (Data.FingerTree.Node a b)
+instance (Binary a, Binary b) => Binary (Data.IntervalMap.FingerTree.Node a b)
+instance Binary a => Binary (Data.IntervalMap.FingerTree.Interval a)
+instance Binary a => Binary (Data.IntervalMap.FingerTree.IntInterval a)
+instance (Binary a, Binary b) => Binary (Data.FingerTree.FingerTree a b)
+instance (Binary a, Binary b) => Binary (Data.IntervalMap.FingerTree.IntervalMap a b)
+instance Binary SourceMap

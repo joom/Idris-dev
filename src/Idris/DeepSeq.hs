@@ -27,6 +27,9 @@ import Util.DynamicLinker
 import Control.DeepSeq
 import Network.Socket (PortNumber)
 
+import qualified Data.FingerTree
+import qualified Data.IntervalMap.FingerTree
+
 -- These types don't have Generic instances
 instance NFData DynamicLib where
     rnf (Lib x _) = rnf x `seq` ()
@@ -42,11 +45,15 @@ instance NFData OutputMode where
   rnf (RawOutput x) = ()
   rnf (IdeMode x y) = rnf x `seq` ()
 
--- IntervalMap doesn't have NFData or Generic instances
--- TODO: Fix this if we update to >= fingertree-0.1.4.1
--- We have to check if it's included in the next Stackage release
-instance NFData SourceMap where
-  rnf (SourceMap intervalmap) = intervalmap `seq` ()
+-- IntervalMap doesn't have NFData instances so we have to generate them all
+instance NFData a => NFData (Data.FingerTree.Digit a)
+instance (NFData a, NFData b) => NFData (Data.FingerTree.Node a b)
+instance (NFData a, NFData b) => NFData (Data.IntervalMap.FingerTree.Node a b)
+instance NFData a => NFData (Data.IntervalMap.FingerTree.Interval a)
+instance NFData a => NFData (Data.IntervalMap.FingerTree.IntInterval a)
+instance (NFData a, NFData b) => NFData (Data.FingerTree.FingerTree a b)
+instance (NFData a, NFData b) => NFData (Data.IntervalMap.FingerTree.IntervalMap a b)
+instance NFData SourceMap
 
 instance NFData a => NFData (D.Docstring a)
 instance NFData ConsoleWidth

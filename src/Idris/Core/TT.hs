@@ -135,7 +135,7 @@ instance S.Semigroup FC where
 -- Wrapped in a new type to avoid an NFData orphan instance.
 newtype SourceMap = SourceMap {
   sourcemap :: I.IntervalMap (Int, Int) Env
-} deriving (Show)
+} deriving (Show, Generic)
 
 emptySourceMap :: SourceMap
 emptySourceMap = SourceMap I.empty
